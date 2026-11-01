@@ -1,5 +1,7 @@
 # Baustellenaufmaß – Startpaket für Codex
 
+**Aktueller Stand:** Das unten beschriebene Startpaket wurde als Basisversion 0.1 umgesetzt. Installation, Funktionen, GitHub-Pages-Einstellungen und iPhone-Abnahme stehen jetzt in [README.md](README.md); die ursprünglichen Vorgaben bleiben zur Nachvollziehbarkeit erhalten.
+
 Dieses Paket enthält **noch keinen fertigen App-Code**, sondern die Anforderungen und einen begrenzten Entwicklungsauftrag für Version 0.1.
 
 ## Enthaltene Dateien
