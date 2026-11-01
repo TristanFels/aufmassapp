@@ -126,6 +126,14 @@ describe("Projektverwaltung in IndexedDB", () => {
 });
 
 describe("Versionierter JSON-Projektimport und -export", () => {
+  it("importiert weiterhin Sicherungen aus Version 0.1.0", async () => {
+    const backup = await exportExample();
+    backup.appVersion = "0.1.0";
+    const imported = await repository.importProject(JSON.stringify(backup));
+    expect(imported.name).toBe("Testbaustelle (Import)");
+    expect(imported.status).toBe(backup.project.status);
+  });
+
   it("stellt einen vollständigen archivierten Projektstand in frischer DB mit gleicher ID wieder her", async () => {
     const original = await repository.createProject("Roundtrip");
     const archived = await repository.setProjectStatus(original.id, "archived");
@@ -133,15 +141,16 @@ describe("Versionierter JSON-Projektimport und -export", () => {
     expect(JSON.parse(json)).toMatchObject({
       format: "baustellenaufmass-project",
       schemaVersion: 1,
-      appVersion: "0.1.0",
+      appVersion: "0.1.1",
       project: archived,
     });
     await db.delete();
     db = createDatabase(`test-roundtrip-${crypto.randomUUID()}`);
     repository = new ProjectRepository(db);
-    expect(await repository.importProject(json)).toEqual(archived);
+    const expected = { ...archived, name: "Roundtrip (Import)" };
+    expect(await repository.importProject(json)).toEqual(expected);
     await reopenDatabase();
-    expect(await repository.listProjects()).toEqual([archived]);
+    expect(await repository.listProjects()).toEqual([expected]);
   });
 
   it("importiert bei ID-Kollision ausschließlich eine Kopie und überschreibt die vorhandene Instanz nicht", async () => {
@@ -150,7 +159,10 @@ describe("Versionierter JSON-Projektimport und -export", () => {
     const changed = await repository.renameProject(original.id, "Lokal neuer");
     const copy = await repository.importProject(json);
     expect(copy.id).not.toBe(original.id);
-    expect({ ...copy, id: original.id }).toEqual(original);
+    expect({ ...copy, id: original.id }).toEqual({
+      ...original,
+      name: "Original (Import)",
+    });
     expect(await repository.getProject(original.id)).toEqual(changed);
     expect(await db.projects.count()).toBe(2);
   });
@@ -163,7 +175,44 @@ describe("Versionierter JSON-Projektimport und -export", () => {
       repository.importProject(JSON.stringify(backup)),
     ]);
     expect(first.id).not.toBe(second.id);
+    expect(new Set([first.name, second.name])).toEqual(
+      new Set(["Testbaustelle (Import)", "Testbaustelle (Import 2)"]),
+    );
     expect(await db.projects.count()).toBe(2);
+  });
+
+  it("kennzeichnet auch reine Namenskollisionen und berücksichtigt archivierte Projekte", async () => {
+    const backup = await exportExample();
+    const reserved = await repository.createProject("Testbaustelle (Import)");
+    await repository.setProjectStatus(reserved.id, "archived");
+    backup.project.id = crypto.randomUUID();
+    const imported = await repository.importProject(JSON.stringify(backup));
+    expect(imported.id).toBe(backup.project.id);
+    expect(imported.name).toBe("Testbaustelle (Import 2)");
+    expect(await repository.getProject(reserved.id)).toMatchObject({
+      name: "Testbaustelle (Import)",
+      status: "archived",
+    });
+    await repository.renameProject(imported.id, "Frei gewählt");
+    await reopenDatabase();
+    expect(await repository.getProject(imported.id)).toMatchObject({
+      name: "Frei gewählt",
+    });
+  });
+
+  it("exportiert auch gekürzte Importnamen erneut als gültiges Projektschema", async () => {
+    const original = await repository.createProject(
+      "😀".repeat(MAX_PROJECT_NAME_LENGTH / 2),
+    );
+    const imported = await repository.importProject(
+      await repository.exportProject(original.id),
+    );
+    expect(imported.name.length).toBeLessThanOrEqual(MAX_PROJECT_NAME_LENGTH);
+    const reimported = await repository.importProject(
+      await repository.exportProject(imported.id),
+    );
+    expect(reimported.name).toMatch(/ \(Import 2\)$/u);
+    expect(reimported.id).not.toBe(imported.id);
   });
 
   it.each(["kein JSON", "{", "null", "[]", "{}"])(

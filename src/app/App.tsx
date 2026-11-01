@@ -280,9 +280,10 @@ export function App() {
                   <section className="panel import-panel">
                     <h2>Projekt aus Sicherung laden</h2>
                     <p>
-                      Einzelprojekt als JSON importieren (max. 1 MiB). Bei
-                      gleicher ID entsteht eine neue Kopie; bestehende Projekte
-                      werden nie überschrieben.
+                      Einzelprojekt als JSON importieren (max. 1 MiB). Im Namen
+                      steht „(Import)“, bei weiteren Importen „(Import 2)“ usw.
+                      Bei gleicher ID entsteht eine neue Kopie; bestehende
+                      Projekte werden nie überschrieben.
                     </p>
                     <label className={`file-button ${busy ? "disabled" : ""}`}>
                       Projekt-JSON importieren

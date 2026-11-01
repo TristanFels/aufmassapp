@@ -1,5 +1,12 @@
 # Änderungsprotokoll
 
+## 0.1.1 · Erkennbare Projektimporte
+
+- Jeder Projektimport bekommt den frei änderbaren Namenszusatz „(Import)“; bereits belegte Namen werden mit „(Import 2)“, „(Import 3)“ usw. unterschieden, auch bei archivierten Projekten.
+- Erneuter Export/Import stapelt keine Importzusätze; lange Namen halten das Namenslimit weiterhin ein.
+- Atomare Namenswahl auch bei gleichzeitigen Importen, zusätzliche Daten-/Namensprüfungen und angepasster Browser-Abnahmetest.
+- Bestehende Projektnamen bleiben unverändert; keine Datenmigration.
+
 ## 0.1.0 · Technische Basis
 
 - React-, TypeScript- und Vite-Grundgerüst mit iPhone-orientierter Oberfläche und Navigation für Projekte, Artikel-Platzhalter und Einstellungen.

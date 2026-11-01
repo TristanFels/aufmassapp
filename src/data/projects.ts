@@ -1,4 +1,5 @@
 import type { AppDatabase } from "./database";
+import { importedProjectName } from "../domain/importName";
 import {
   APP_VERSION,
   SCHEMA_VERSION,
@@ -111,7 +112,12 @@ export class ProjectRepository {
       let id = incoming.id;
       // Read and insert share one write transaction, including simultaneous imports.
       while (await this.db.projects.get(id)) id = crypto.randomUUID();
-      const project: Project = { ...incoming, id };
+      const existing = await this.db.projects.toArray();
+      const name = importedProjectName(
+        incoming.name,
+        existing.map((project) => project.name),
+      );
+      const project: Project = { ...incoming, id, name };
       await this.db.projects.add(project);
       return project;
     });
