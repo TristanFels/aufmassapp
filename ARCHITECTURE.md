@@ -30,6 +30,8 @@ Der Export umfasst Metadaten zum Dateiformat, Schema/App-Version und Erstellungs
 
 Die Speicherung erfolgt in einer IndexedDB-Transaktion. Ohne vorhandene ID wird die Projektidentität wiederhergestellt. Bei vorhandener ID wird eine neue ID erzeugt; die vorhandene Instanz wird niemals überschrieben. Eine gescheiterte Validierung oder Transaktion darf keine Teiländerung hinterlassen. Erweiterter Import mit Vorschau, Zusammenführen oder Ersetzen gehört nicht zu diesem Inkrement.
 
+Seit Version 0.1.1 erhält jeder importierte Projektname „(Import)“ bzw. die nächste freie Nummer „(Import 2)“ usw. Die Namenswahl berücksichtigt aktive und archivierte Projekte, Groß-/Kleinschreibung und kanonisch gleiche Unicode-Schreibweisen. Namensprüfung und Einfügen laufen in derselben Schreibtransaktion, sodass parallele Imports unterscheidbare Namen erhalten. Vorhandene generierte Zusätze werden entfernt, bevor der neue Zusatz gewählt wird; lange Basisnamen werden Unicode-sicher auf das bestehende Namenslimit gekürzt. Status und Zeitstempel bleiben erhalten. Dafür sind weder eine Schemaänderung noch eine Datenmigration nötig; vorhandene Projekte bleiben unverändert.
+
 ## Offline und Updates
 
 Der Service Worker hält ausschließlich die statische App-Shell und deren lokale Assets vor. Projekte bleiben in IndexedDB und werden nicht als Netzwerkantworten gecacht. Der erste erfolgreiche Onlineaufruf muss die App-Shell vollständig zwischenspeichern; eine Bereitschaftsanzeige hilft bei der Offline-Abnahme. Der Entwicklungsserver ist kein Nachweis für den Produktions-Service-Worker.

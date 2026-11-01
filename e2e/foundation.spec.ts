@@ -117,7 +117,7 @@ test("Zuletzt geöffnet führt auch nach Neustart zum zuletzt ausgewählten Proj
   ).toBeVisible();
 });
 
-test("JSON stellt ein Projekt in frischer Datenbank wieder her und importiert Kollision als Kopie", async ({
+test("JSON stellt Projekte mit Importnamen wieder her und nummeriert Kopien ohne Originaländerung", async ({
   page,
   browser,
 }, testInfo) => {
@@ -143,11 +143,11 @@ test("JSON stellt ein Projekt in frischer Datenbank wieder her und importiert Ko
       .setInputFiles(savedFile);
     await restored
       .getByRole("region", { name: "Aktive Projekte", exact: true })
-      .getByRole("link", { name: /^JSON-Testbaustelle / })
+      .getByRole("link", { name: /^JSON-Testbaustelle \(Import\) / })
       .click();
     await expect(
       restored.getByRole("heading", {
-        name: "JSON-Testbaustelle",
+        name: "JSON-Testbaustelle (Import)",
         exact: true,
       }),
     ).toBeVisible();
@@ -155,7 +155,7 @@ test("JSON stellt ein Projekt in frischer Datenbank wieder her und importiert Ko
     await restored.reload();
     await expect(
       restored.getByRole("heading", {
-        name: "JSON-Testbaustelle",
+        name: "JSON-Testbaustelle (Import)",
         exact: true,
       }),
     ).toBeVisible();
@@ -167,15 +167,62 @@ test("JSON stellt ein Projekt in frischer Datenbank wieder her und importiert Ko
   await page
     .getByLabel("Projekt-JSON importieren", { exact: true })
     .setInputFiles(savedFile);
-  const projectLinks = page
-    .getByRole("region", { name: "Aktive Projekte", exact: true })
-    .getByRole("link", { name: /^JSON-Testbaustelle / });
-  await expect(projectLinks).toHaveCount(2);
-  const urls = await projectLinks.evaluateAll((links) =>
-    links.map((link) => (link as HTMLAnchorElement).href),
-  );
-  expect(new Set(urls).size).toBe(2);
-  expect(urls).toContain(originalURL);
+  const active = page.getByRole("region", {
+    name: "Aktive Projekte",
+    exact: true,
+  });
+  const imported = active.getByRole("link", {
+    name: /^JSON-Testbaustelle \(Import\) /,
+  });
+  await expect(active.getByRole("link")).toHaveCount(2);
+  const firstImportURL = await imported.getAttribute("href");
+  expect(firstImportURL).not.toBe(new URL(originalURL).hash);
+  await imported.click();
+  await page
+    .getByRole("button", { name: "Projekt archivieren", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Projekt reaktivieren", exact: true }),
+  ).toBeVisible();
+
+  // An archived import must also reserve its name for future imports.
+  await page.goto(`${path}#/projects`);
+  await page
+    .getByLabel("Projekt-JSON importieren", { exact: true })
+    .setInputFiles(savedFile);
+  const secondImport = active.getByRole("link", {
+    name: /^JSON-Testbaustelle \(Import 2\) /,
+  });
+  await expect(secondImport).toBeVisible();
+  const secondImportURL = await secondImport.getAttribute("href");
+  expect(secondImportURL).not.toBe(firstImportURL);
+  expect(secondImportURL).not.toBe(new URL(originalURL).hash);
+  await page.reload();
+  await expect(secondImport).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Archivierte Projekte", exact: true })
+      .getByRole("link", { name: /^JSON-Testbaustelle \(Import\) / }),
+  ).toBeVisible();
+
+  await secondImport.click();
+  await page
+    .getByRole("textbox", { name: "Projektname", exact: true })
+    .fill("Manuell benannte Kopie");
+  await page
+    .getByRole("button", { name: "Namen speichern", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Manuell benannte Kopie", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("textbox", { name: "Projektname", exact: true }),
+  ).toHaveValue("Manuell benannte Kopie");
+  await page.goto(originalURL);
+  await expect(
+    page.getByRole("heading", { name: "JSON-Testbaustelle", exact: true }),
+  ).toBeVisible();
 });
 
 test("Fehlerhafter JSON-Import meldet Fehler und lässt vorhandene Projekte unverändert", async ({
