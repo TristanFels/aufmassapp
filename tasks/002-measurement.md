@@ -2,11 +2,11 @@
 
 **Zielversion:** 0.2
 
-**Status:** Entwurf; die vom Nutzer angekündigte Startartikelliste steht noch aus.
+**Status:** Umsetzung gemäß Nutzerentscheidung; Startliste aus Bild und Ergänzung übernommen.
 
 **Ausgangspunkt:** Basisversion 0.1 und erkennbare Importnamen aus 0.1.1.
 
-Dieses Dokument hält die besprochenen Entscheidungen fest. Die konkrete Startliste wird hier ergänzt, bevor der Startkatalog implementiert wird. Es werden keine Artikel, Artikelnummern oder Preise erfunden. Dieser Entwurf verändert die Anwendung noch nicht und ersetzt nicht rückwirkend den Auftrag 001.
+Dieses Dokument begrenzt Version 0.2 gemäß den besprochenen Entscheidungen. Es ersetzt nicht rückwirkend den Auftrag 001. Artikelnummern, Preise und nicht mitgeteilte Produktspezifikationen werden nicht erfunden. Die Mengen im Beispielbild werden nicht in neue Projekte oder in den Standardkatalog übernommen.
 
 ## Bestätigte Entscheidungen
 
@@ -28,7 +28,30 @@ Dieses Dokument hält die besprochenen Entscheidungen fest. Die konkrete Startli
 6. Projekt-JSON so erweitern, dass Aufmaßdaten und die dafür benötigten selbst angelegten Artikel/Varianten auf einem anderen Gerät wiederhergestellt werden können. Keine vollständige App-Sicherung vorziehen.
 7. Versionierte Datenbankmigration und Importkompatibilität für 0.1/0.1.1 vorsehen. Bestehende Projekte, Designwahl und Schnellzugriff bleiben erhalten; bestehende Datenbanken nicht löschen oder neu anlegen.
 
-Die genaue Startartikelgliederung und Einheit werden anhand der angekündigten Liste konkretisiert. Insbesondere muss klar sein, ob eine Bezeichnung einen Einsatz, eine Abdeckung/Wippe, einen Rahmen oder eine vollständige Einheit meint. Die bisher vorgeschlagene Einheit für den kleinen Startkatalog ist Stück; dies ist noch keine Freigabe beliebiger Mengentypen.
+## Startkatalog
+
+Alle Positionen werden einzeln in Stück erfasst. Schalter sind Einsätze; Wippen, Abdeckungen und Rahmen werden separat gezählt. Steckdosen werden als eigenständige Position ohne Rahmen geführt. Eine automatische Zuordnung erfolgt nicht.
+
+| Kategorie | Startartikel |
+| --- | --- |
+| Rahmen | Einfachrahmen; Doppelrahmen; Dreifachrahmen; Vierfachrahmen |
+| Schalter und Taster | Ausschalter-Einsatz; Kreuzschalter-Einsatz; Serienschalter-Einsatz; Taster-Einsatz |
+| Wippen und Abdeckungen | Wippe; Serienschalterwippe; Blindabdeckung |
+| Steckdosen | Steckdose; Steckdose mit Klappdeckel |
+| Anschlüsse | Herdanschlussdose |
+| Multimedia und Kommunikation | Multimedia-Enddose; Multimedia-Durchgangsdose; SAT-Stichdose; SAT-Enddose; Multimedia-Abdeckung; Unterputz-TAE-Dose; TAE-Abdeckung |
+| Leuchten | Tellerleuchte Ø mindestens 25 cm |
+
+Insgesamt 22 Positionen. Gira/System 55/Reinweiß glänzend gilt als Ausgangsausführung der passenden Schalterprogramm-Artikel; bei Herdanschlussdose und Tellerleuchte bleiben nicht bekannte Hersteller-/Serien-/Farbangaben leer. Einsätze mit sichtbarer Abdeckung werden nicht automatisch kombiniert. Technische Ausführungen wie Anschlusszahl oder Dämpfung der Multimedia-/SAT-Dosen werden nicht geraten; der Katalog kann später um konkrete Varianten ergänzt werden.
+
+## Konkrete technische Regeln
+
+- Eine Katalogzeile steht für genau eine konkrete zählbare Variante; stabile UUIDs und Revisionen, keine Zusammenfassung nach Namen. Änderungen an Hersteller, Serie oder Farbe nach erfolgter Verwendung werden abgewiesen; dafür einen neuen Artikel anlegen. Namens-/Kategoriepflege bleibt möglich; bereits erfasste Snapshots bleiben unverändert.
+- Favoriten sind einfache lokale Katalogmarkierungen, keine frei konfigurierbaren Layouts. Deaktivierung entfernt keine Datensätze.
+- Stückmengen sind ganze Zahlen von 0 bis 1.000.000. Jede bestätigte Änderung legt eine Buchung mit Differenz an; das Setzen einer Gesamtsumme berechnet die Differenz innerhalb derselben Transaktion. Keine negativen Summen, auch bei parallelen Änderungen. Archivierte Projekte erlauben keine neuen Mengenänderungen.
+- Datenbankversion 2 ergänzt Artikel und Buchungen; bestehende Projekte und Einstellungen werden beibehalten. Bestehendes Projektschema 1 bleibt lesbar. Neue Projekt-JSON-Dateien verwenden Dateischema 2 und enthalten nur referenzierte Artikel plus Buchungen mit konkreten Snapshots. Dateischema 1 aus Version 0.1/0.1.1 bleibt importierbar.
+- Import validiert vor dem Schreiben Struktur, Referenzen, Mengen und Versionen. Projekt-ID-Kollisionen erzeugen Kopien. Buchungs-IDs werden neu vergeben; bei kollidierender Artikel-ID mit abweichenden Artikeldaten wird eine neue ID vergeben und jede Referenz einschließlich Snapshot umgeschrieben. Ein identischer vorhandener Artikel wird ohne Überschreiben lokaler Einstellungen wiederverwendet. Alles erfolgt atomar; die Importnamensregel aus 0.1.1 bleibt bestehen.
+- CSV ist UTF-8 mit BOM, Semikolon und korrekt maskierten Feldern. Spalten: Bezeichnung, Kategorie, Hersteller, Serie, Farbe, Einheit, Menge. Als Tabellenformeln interpretierbare Textwerte werden geschützt. Keine Firmenkennungen oder Preise.
 
 ## Schutz bestehender Aufmaße
 
@@ -62,6 +85,6 @@ Keine automatische Wippen-/Komponentenzuordnung, Materialkombinationen, Bereichs
 - CSV enthält die erwarteten Varianten und Mengen, ist korrekt maskiert und für Excel geeignet.
 - Daten-, Mengen-, Migration-, Import-/Export- und Browser-/Offline-Tests sowie Produktions-Build bestehen. iPhone-Touchbedienung, Tastatur, Dateiexport und Offline-Kaltstart werden zusätzlich auf einem echten Gerät abgenommen.
 
-## Noch zu ergänzen
+## Weiterhin bewusst offen
 
-Die angekündigte Startliste mit eindeutiger Bedeutung jedes Artikels. Ohne diese Liste wird der erste Produktkatalog nicht mit geratenen Bezeichnungen befüllt. Anschließend werden die verbleibenden technischen Details des Sicherungsschemas und der Artikelkonflikte im Auftrag konkretisiert.
+Konkrete Artikelnummern, Preise, besondere Wippen und technische Detailausführungen werden erst mit späteren Nutzereingaben ergänzt. Keine Herstellerdaten oder Kombinationen allein anhand eines ähnlichen Artikelnamens ableiten.

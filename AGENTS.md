@@ -3,8 +3,9 @@
 ## Verbindliche Quellen
 - `docs/REQUIREMENTS.md`: langfristige Fachanforderungen A01–A30
 - `docs/DATA_MODEL.md`: Entwurf für spätere Datenstrukturen
-- `tasks/001-foundation.md`: **einziger Implementierungsumfang des aktuellen Inkrements**
-- Bei Widersprüchen die engere Aufgabenabgrenzung aus `tasks/001-foundation.md` für den aktuellen Implementierungsschritt anwenden; fachliche Entscheidungen nicht stillschweigend abändern.
+- `tasks/001-foundation.md`: abgeschlossene technische Basisversion 0.1.
+- `tasks/002-measurement.md`: **einziger Implementierungsumfang des aktuellen Inkrements 0.2**, einschließlich der vom Nutzer gelieferten Startliste und direkt bearbeitbarem Katalog.
+- Bei Widersprüchen die engere Aufgabenabgrenzung des aktuellen Auftrags anwenden; fachliche Entscheidungen nicht stillschweigend abändern. Automatische Wippenzuordnung und Kombinationen gehören weiterhin einer späteren Stufe an.
 
 ## Vorgehen
 1. Bestehenden Repository-Inhalt prüfen. Nichts ohne Not überschreiben.

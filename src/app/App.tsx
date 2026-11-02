@@ -6,8 +6,10 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { liveQuery } from "dexie";
-import { projects } from "./services";
+import { liveQuery, type Subscription } from "dexie";
+import { projects, materials } from "./services";
+import { Catalog } from "../features/Catalog";
+import { Measurement } from "../features/Measurement";
 import { useTheme } from "./useTheme";
 import {
   APP_VERSION,
@@ -102,20 +104,37 @@ export function App() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const errorElement = useRef<HTMLDivElement>(null);
   const operationLock = useRef(false);
   useTheme(snapshot?.theme ?? "system");
+  useEffect(() => {
+    if (error) errorElement.current?.focus();
+  }, [error]);
 
   useEffect(() => {
     setDbError(false);
-    const subscription = liveQuery(async () => {
-      const [list, recent, theme] = await Promise.all([
-        projects.listProjects(),
-        projects.getLastProject(),
-        projects.getTheme(),
-      ]);
-      return { list, recent, theme };
-    }).subscribe({ next: setSnapshot, error: () => setDbError(true) });
-    return () => subscription.unsubscribe();
+    let cancelled = false;
+    let subscription: Subscription | undefined;
+    void materials
+      .ensureSeed()
+      .then(() => {
+        if (cancelled) return;
+        subscription = liveQuery(async () => {
+          const [list, recent, theme] = await Promise.all([
+            projects.listProjects(),
+            projects.getLastProject(),
+            projects.getTheme(),
+          ]);
+          return { list, recent, theme };
+        }).subscribe({ next: setSnapshot, error: () => setDbError(true) });
+      })
+      .catch(() => {
+        if (!cancelled) setDbError(true);
+      });
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
   }, [retry]);
 
   useEffect(() => {
@@ -167,7 +186,7 @@ export function App() {
     if (!file) return;
     await perform(async () => {
       if (file.size > MAX_IMPORT_BYTES)
-        throw new Error("Die JSON-Datei ist zu groß (höchstens 1 MiB).");
+        throw new Error("Die JSON-Datei ist zu groß (höchstens 16 MiB).");
       const project = await projects.importProject(await file.text());
       setMessage(
         `„${project.name}“ importiert. Vorhandene Projekte bleiben unverändert.`,
@@ -201,7 +220,12 @@ export function App() {
       <main id="main-content">
         <OfflineStatus busy={busy} />
         {error && (
-          <div role="alert" className="notice error">
+          <div
+            role="alert"
+            className="notice error"
+            ref={errorElement}
+            tabIndex={-1}
+          >
             {error}
             <button className="text-button" onClick={() => setError("")}>
               Meldung schließen
@@ -280,7 +304,7 @@ export function App() {
                   <section className="panel import-panel">
                     <h2>Projekt aus Sicherung laden</h2>
                     <p>
-                      Einzelprojekt als JSON importieren (max. 1 MiB). Im Namen
+                      Einzelprojekt als JSON importieren (max. 16 MiB). Im Namen
                       steht „(Import)“, bei weiteren Importen „(Import 2)“ usw.
                       Bei gleicher ID entsteht eine neue Kopie; bestehende
                       Projekte werden nie überschrieben.
@@ -303,20 +327,7 @@ export function App() {
                   <p className="eyebrow">SCHRITT FÜR SCHRITT</p>
                   <h1>Artikel</h1>
                 </div>
-                <section className="panel placeholder">
-                  <span className="large-symbol">
-                    <Icon name="articles" />
-                  </span>
-                  <h2>Die Grundlage steht.</h2>
-                  <p>
-                    Artikelkatalog und Materialerfassung folgen in einer
-                    späteren Version. In Version 0.1 verwaltest und sicherst du
-                    deine Projekte.
-                  </p>
-                  <a className="button" href="#/projects">
-                    Zu den Projekten
-                  </a>
-                </section>
+                <Catalog busy={busy} perform={perform} />
               </>
             )}
             {route.page === "settings" && (
@@ -377,9 +388,7 @@ export function App() {
                     Home-Bildschirm“. Vor dem Offline-Einsatz auf „Offline
                     bereit“ warten.
                   </p>
-                  <small>
-                    Baustellenaufmaß {APP_VERSION} · Projektschema 1
-                  </small>
+                  <small>Baustellenaufmaß {APP_VERSION}</small>
                 </section>
               </>
             )}
@@ -518,21 +527,26 @@ function ProjectDetail({
     window.addEventListener("beforeunload", preventUnload);
     return () => window.removeEventListener("beforeunload", preventUnload);
   }, [changed]);
-  async function download() {
-    const text = await projects.exportProject(project.id);
+  async function download(kind: "json" | "csv" = "json") {
+    const text =
+      kind === "json"
+        ? await projects.exportProject(project.id)
+        : await projects.exportProjectCsv(project.id);
     const url = URL.createObjectURL(
-      new Blob([text], { type: "application/json" }),
+      new Blob([text], {
+        type: kind === "json" ? "application/json" : "text/csv;charset=utf-8",
+      }),
     );
     const link = document.createElement("a");
     link.href = url;
-    link.download = `aufmass-projekt-${project.id}.json`;
+    link.download = `aufmass-projekt-${project.id}.${kind}`;
     document.body.append(link);
     link.click();
     link.remove();
     // Give Safari time to start the download before releasing the blob.
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     notify(
-      "JSON-Datei erstellt. Bitte außerhalb der App in „Dateien“ sichern und die gespeicherte Datei prüfen.",
+      `${kind.toUpperCase()}-Datei erstellt. Bitte außerhalb der App in „Dateien“ sichern und die gespeicherte Datei prüfen.`,
     );
   }
   return (
@@ -550,6 +564,12 @@ function ProjectDetail({
         <h1>{project.name}</h1>
         <p>Lokal gespeichert · Änderungen bleiben auf diesem Gerät.</p>
       </div>
+      <Measurement
+        projectId={project.id}
+        archived={project.status === "archived"}
+        busy={busy}
+        perform={perform}
+      />
       <section className="panel">
         <h2>Projekt bearbeiten</h2>
         <form
@@ -585,11 +605,19 @@ function ProjectDetail({
       <section className="panel">
         <h2>Projekt sichern</h2>
         <p>
-          Eine JSON-Datei enthält dieses Projekt mit Name, Status und
-          Zeitstempeln. Sie lässt sich später wieder importieren.
+          JSON sichert dieses Projekt einschließlich Aufmaß und benötigten
+          Artikeln zum Wiederherstellen. CSV enthält die Materialliste zum
+          Weitergeben.
         </p>
         <button disabled={busy} onClick={() => void perform(download)}>
           JSON exportieren
+        </button>
+        <button
+          className="secondary"
+          disabled={busy}
+          onClick={() => void perform(() => download("csv"))}
+        >
+          CSV exportieren
         </button>
       </section>
       <section className="panel">

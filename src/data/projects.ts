@@ -1,13 +1,19 @@
 import type { AppDatabase } from "./database";
 import { importedProjectName } from "../domain/importName";
 import {
+  aggregateEntries,
+  type Article,
+  type MeasurementEntry,
+} from "../domain/material";
+import { materialCsv } from "../domain/csv";
+import {
   APP_VERSION,
   SCHEMA_VERSION,
   isTheme,
   parseProjectBackup,
   validateProjectName,
   type Project,
-  type ProjectBackup,
+  type ProjectBackupV2,
   type ProjectStatus,
   type Theme,
 } from "../domain/project";
@@ -95,32 +101,127 @@ export class ProjectRepository {
   }
 
   async exportProject(id: string): Promise<string> {
-    const project = await this.requireProject(id);
-    const backup: ProjectBackup = {
-      format: "baustellenaufmass-project",
-      schemaVersion: SCHEMA_VERSION,
-      appVersion: APP_VERSION,
-      exportedAt: new Date().toISOString(),
-      project,
-    };
-    return JSON.stringify(backup, null, 2);
+    return this.db.transaction(
+      "r",
+      this.db.projects,
+      this.db.articles,
+      this.db.measurements,
+      async () => {
+        const project = await this.requireProject(id);
+        const measurements = await this.db.measurements
+          .where("projectId")
+          .equals(id)
+          .toArray();
+        const articles: Article[] = [];
+        for (const articleId of new Set(
+          measurements.map((entry) => entry.articleId),
+        )) {
+          const article = await this.db.articles.get(articleId);
+          if (!article)
+            throw new Error(
+              "Ein erfasster Artikel fehlt. Das Projekt wurde nicht unvollständig exportiert.",
+            );
+          articles.push(article);
+        }
+        const backup: ProjectBackupV2 = {
+          format: "baustellenaufmass-project",
+          schemaVersion: 2,
+          appVersion: APP_VERSION,
+          exportedAt: new Date().toISOString(),
+          project,
+          articles,
+          measurements,
+        };
+        const text = JSON.stringify(backup, null, 2);
+        // Guarantee that every generated backup can be imported within supported bounds.
+        parseProjectBackup(text);
+        return text;
+      },
+    );
+  }
+
+  async exportProjectCsv(id: string): Promise<string> {
+    return this.db.transaction(
+      "r",
+      this.db.projects,
+      this.db.measurements,
+      async () => {
+        await this.requireProject(id);
+        const entries = await this.db.measurements
+          .where("projectId")
+          .equals(id)
+          .toArray();
+        return materialCsv(aggregateEntries(entries));
+      },
+    );
   }
 
   async importProject(text: string): Promise<Project> {
-    const { project: incoming } = parseProjectBackup(text);
-    return this.db.transaction("rw", this.db.projects, async () => {
-      let id = incoming.id;
-      // Read and insert share one write transaction, including simultaneous imports.
-      while (await this.db.projects.get(id)) id = crypto.randomUUID();
-      const existing = await this.db.projects.toArray();
-      const name = importedProjectName(
-        incoming.name,
-        existing.map((project) => project.name),
-      );
-      const project: Project = { ...incoming, id, name };
-      await this.db.projects.add(project);
-      return project;
-    });
+    const backup = parseProjectBackup(text);
+    const incoming = backup.project;
+    return this.db.transaction(
+      "rw",
+      this.db.projects,
+      this.db.articles,
+      this.db.measurements,
+      async () => {
+        let id = incoming.id;
+        // Read and insert share one write transaction, including simultaneous imports.
+        while (await this.db.projects.get(id)) id = crypto.randomUUID();
+        const existing = await this.db.projects.toArray();
+        const name = importedProjectName(
+          incoming.name,
+          existing.map((project) => project.name),
+        );
+        const project: Project = { ...incoming, id, name };
+        if (backup.schemaVersion === 2) {
+          const remap = new Map<string, string>();
+          for (const incomingArticle of backup.articles) {
+            const existingArticle = await this.db.articles.get(
+              incomingArticle.id,
+            );
+            if (
+              existingArticle &&
+              this.sameArticleIdentity(existingArticle, incomingArticle) &&
+              existingArticle.revision >= incomingArticle.revision
+            ) {
+              remap.set(incomingArticle.id, existingArticle.id);
+              continue;
+            }
+            let articleId = incomingArticle.id;
+            while (await this.db.articles.get(articleId))
+              articleId = crypto.randomUUID();
+            await this.db.articles.add({ ...incomingArticle, id: articleId });
+            remap.set(incomingArticle.id, articleId);
+          }
+          for (const incomingEntry of backup.measurements) {
+            const articleId = remap.get(incomingEntry.articleId)!;
+            let entryId = crypto.randomUUID();
+            while (await this.db.measurements.get(entryId))
+              entryId = crypto.randomUUID();
+            const entry: MeasurementEntry = {
+              ...incomingEntry,
+              id: entryId,
+              projectId: id,
+              articleId,
+              articleSnapshot: {
+                ...incomingEntry.articleSnapshot,
+                id: articleId,
+              },
+            };
+            await this.db.measurements.add(entry);
+          }
+        }
+        await this.db.projects.add(project);
+        return project;
+      },
+    );
+  }
+
+  private sameArticleIdentity(first: Article, second: Article): boolean {
+    return (
+      ["name", "category", "unit", "manufacturer", "series", "color"] as const
+    ).every((field) => first[field] === second[field]);
   }
 
   async getTheme(): Promise<Theme> {
