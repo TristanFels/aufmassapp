@@ -146,8 +146,8 @@ describe("Versionierter JSON-Projektimport und -export", () => {
     const json = await repository.exportProject(original.id);
     expect(JSON.parse(json)).toMatchObject({
       format: "baustellenaufmass-project",
-      schemaVersion: 2,
-      appVersion: "0.2.0",
+      schemaVersion: 3,
+      appVersion: "0.2.1",
       project: archived,
     });
     await db.delete();
@@ -236,7 +236,7 @@ describe("Versionierter JSON-Projektimport und -export", () => {
 
   const invalidChanges: [string, (backup: ProjectBackup) => unknown][] = [
     ["anderes Format", (b) => ({ ...b, format: "unbekannt" })],
-    ["zukünftiges Dateischema", (b) => ({ ...b, schemaVersion: 3 })],
+    ["zukünftiges Dateischema", (b) => ({ ...b, schemaVersion: 4 })],
     [
       "zukünftiges Projektschema",
       (b) => ({ ...b, project: { ...b.project, schemaVersion: 2 } }),

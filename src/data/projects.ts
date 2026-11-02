@@ -13,7 +13,7 @@ import {
   parseProjectBackup,
   validateProjectName,
   type Project,
-  type ProjectBackupV2,
+  type ProjectBackupV3,
   type ProjectStatus,
   type Theme,
 } from "../domain/project";
@@ -106,6 +106,7 @@ export class ProjectRepository {
       this.db.projects,
       this.db.articles,
       this.db.measurements,
+      this.db.namedMeasurements,
       async () => {
         const project = await this.requireProject(id);
         const measurements = await this.db.measurements
@@ -123,9 +124,13 @@ export class ProjectRepository {
             );
           articles.push(article);
         }
-        const backup: ProjectBackupV2 = {
+        const backup: ProjectBackupV3 = {
           format: "baustellenaufmass-project",
-          schemaVersion: 2,
+          schemaVersion: 3,
+          namedMeasurements: await this.db.namedMeasurements
+            .where("projectId")
+            .equals(id)
+            .toArray(),
           appVersion: APP_VERSION,
           exportedAt: new Date().toISOString(),
           project,
@@ -145,13 +150,14 @@ export class ProjectRepository {
       "r",
       this.db.projects,
       this.db.measurements,
+      this.db.namedMeasurements,
       async () => {
         await this.requireProject(id);
         const entries = await this.db.measurements
           .where("projectId")
           .equals(id)
           .toArray();
-        return materialCsv(aggregateEntries(entries));
+        return materialCsv(aggregateEntries(entries, Number.MAX_SAFE_INTEGER));
       },
     );
   }
@@ -164,6 +170,7 @@ export class ProjectRepository {
       this.db.projects,
       this.db.articles,
       this.db.measurements,
+      this.db.namedMeasurements,
       async () => {
         let id = incoming.id;
         // Read and insert share one write transaction, including simultaneous imports.
@@ -174,7 +181,34 @@ export class ProjectRepository {
           existing.map((project) => project.name),
         );
         const project: Project = { ...incoming, id, name };
-        if (backup.schemaVersion === 2) {
+        if (backup.schemaVersion !== 1) {
+          const sheets =
+            backup.schemaVersion === 3
+              ? backup.namedMeasurements
+              : backup.measurements.length
+                ? [
+                    {
+                      id: crypto.randomUUID(),
+                      projectId: incoming.id,
+                      name: "Bisheriges Aufmaß",
+                      category: "",
+                      createdAt: incoming.createdAt,
+                      updatedAt: incoming.updatedAt,
+                    },
+                  ]
+                : [];
+          const sheetIds = new Map<string, string>();
+          for (const sheet of sheets) {
+            let sheetId = crypto.randomUUID();
+            while (await this.db.namedMeasurements.get(sheetId))
+              sheetId = crypto.randomUUID();
+            sheetIds.set(sheet.id, sheetId);
+            await this.db.namedMeasurements.add({
+              ...sheet,
+              id: sheetId,
+              projectId: id,
+            });
+          }
           const remap = new Map<string, string>();
           for (const incomingArticle of backup.articles) {
             const existingArticle = await this.db.articles.get(
@@ -203,6 +237,11 @@ export class ProjectRepository {
               ...incomingEntry,
               id: entryId,
               projectId: id,
+              measurementId: sheetIds.get(
+                backup.schemaVersion === 3
+                  ? incomingEntry.measurementId!
+                  : sheets[0].id,
+              )!,
               articleId,
               articleSnapshot: {
                 ...incomingEntry.articleSnapshot,

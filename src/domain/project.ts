@@ -1,3 +1,4 @@
+import { isNamedMeasurement, type NamedMeasurement } from "./measurement";
 import {
   isArticle,
   isMeasurementEntry,
@@ -6,7 +7,7 @@ import {
   type MeasurementEntry,
 } from "./material";
 
-export const APP_VERSION = "0.2.0";
+export const APP_VERSION = "0.2.1";
 export const SCHEMA_VERSION = 1;
 export const MAX_PROJECT_NAME_LENGTH = 120;
 export const MAX_IMPORT_BYTES = 16 * 1_048_576;
@@ -31,14 +32,24 @@ export interface LegacyProjectBackup {
   project: Project;
 }
 
-export interface ProjectBackupV2
-  extends Omit<LegacyProjectBackup, "schemaVersion"> {
+export interface ProjectBackupV2 extends Omit<
+  LegacyProjectBackup,
+  "schemaVersion"
+> {
   schemaVersion: 2;
   articles: Article[];
   measurements: MeasurementEntry[];
 }
 
-export type ProjectBackup = LegacyProjectBackup | ProjectBackupV2;
+export interface ProjectBackupV3 extends Omit<
+  ProjectBackupV2,
+  "schemaVersion"
+> {
+  schemaVersion: 3;
+  namedMeasurements: NamedMeasurement[];
+}
+export type ProjectBackup =
+  LegacyProjectBackup | ProjectBackupV2 | ProjectBackupV3;
 
 export function validateProjectName(name: string): string {
   const trimmed = name.trim();
@@ -110,7 +121,9 @@ function isProject(value: unknown): value is Project {
   );
 }
 
-function consistentMaterials(backup: ProjectBackupV2): boolean {
+function consistentMaterials(
+  backup: ProjectBackupV2 | ProjectBackupV3,
+): boolean {
   const articles = new Map(
     backup.articles.map((article) => [article.id, article]),
   );
@@ -136,7 +149,31 @@ function consistentMaterials(backup: ProjectBackupV2): boolean {
   }
   // Project exports contain only referenced articles, including zeroed-out history.
   try {
-    aggregateEntries(backup.measurements);
+    aggregateEntries(
+      backup.measurements,
+      backup.schemaVersion === 3 ? Number.MAX_SAFE_INTEGER : undefined,
+    );
+    if (backup.schemaVersion === 3) {
+      const sheets = new Map(
+        backup.namedMeasurements.map((sheet) => [sheet.id, sheet]),
+      );
+      if (
+        sheets.size !== backup.namedMeasurements.length ||
+        backup.namedMeasurements.some(
+          (sheet) => sheet.projectId !== backup.project.id,
+        ) ||
+        backup.measurements.some(
+          (entry) => !entry.measurementId || !sheets.has(entry.measurementId),
+        )
+      )
+        return false;
+      for (const sheet of sheets.values())
+        aggregateEntries(
+          backup.measurements.filter(
+            (entry) => entry.measurementId === sheet.id,
+          ),
+        );
+    }
   } catch {
     return false;
   }
@@ -181,11 +218,31 @@ export function parseProjectBackup(text: string): ProjectBackup {
     Array.isArray(value.articles) &&
     value.articles.every(isArticle) &&
     Array.isArray(value.measurements) &&
-    value.measurements.every(isMeasurementEntry) &&
+    value.measurements.every(
+      (entry) =>
+        isMeasurementEntry(entry) && !Object.hasOwn(entry, "measurementId"),
+    ) &&
     consistentMaterials(value as unknown as ProjectBackupV2);
-  if (!validLegacy && !validCurrent) {
+  const validV3 =
+    isRecord(value) &&
+    validCommon &&
+    value.schemaVersion === 3 &&
+    hasExactKeys(value, [
+      ...commonKeys,
+      "articles",
+      "measurements",
+      "namedMeasurements",
+    ]) &&
+    Array.isArray(value.articles) &&
+    value.articles.every(isArticle) &&
+    Array.isArray(value.namedMeasurements) &&
+    value.namedMeasurements.every(isNamedMeasurement) &&
+    Array.isArray(value.measurements) &&
+    value.measurements.every(isMeasurementEntry) &&
+    consistentMaterials(value as unknown as ProjectBackupV3);
+  if (!validLegacy && !validCurrent && !validV3) {
     throw new Error(
-      "Unbekanntes oder fehlerhaftes Projektformat. Unterstützt werden die vollständigen Sicherungsschemata 1 und 2; zusätzliche Felder werden nicht verworfen.",
+      "Unbekanntes oder fehlerhaftes Projektformat. Unterstützt werden die vollständigen Sicherungsschemata 1, 2 und 3; zusätzliche Felder werden nicht verworfen.",
     );
   }
   return value as unknown as ProjectBackup;

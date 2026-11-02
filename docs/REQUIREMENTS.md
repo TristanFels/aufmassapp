@@ -35,7 +35,7 @@ Langfristig nutzbare, modular erweiterbare Anwendung für Materialaufmaß, Mater
 | A17 | Speichern | Lokales automatisches Speichern, lokale Wiederherstellungspunkte, App-interne Erinnerungen an externe JSON-Backups. |
 | A18 | Backups | Sowohl Einzelprojekt-JSON als auch vollständiges App-JSON mit Projekten, Artikeln, Kombinationen, Favoriten und Einstellungen. |
 | A19 | Import | Beim Import Ergänzen oder Ersetzen wählbar; Vorschau, Konfliktbehandlung und Sicherheitsbestätigung. |
-| A20 | Navigation | Startseite mit aktiven Projekten und Schnellzugriff zuletzt bearbeitet; Hauptnavigation Projekte, Artikelkatalog, Einstellungen; Projektbereiche Aufmaß, Materialplanung, Export. |
+| A20 | Navigation | Startseite mit aktiven Projekten und Schnellzugriff zuletzt bearbeitet; Hauptnavigation Projekt, Aufmaß, Artikel, Einstellungen (Erweiterung 0.2.1); Projektverwaltung und Aufmaßerfassung getrennt. Später Materialplanung. |
 | A21 | Module | Mehrere spezialisierte Eingabeoberflächen je Projekt auf gemeinsamer Materialliste. |
 | A22 | Historie | Schnelle Summenbearbeitung, gleichzeitig nachvollziehbarer Erfassungs-/Änderungsverlauf. |
 | A23 | Korrekturen | Mehrstufiges Rückgängig/Wiederholen; gezielte Korrektur alter Erfassungen, protokolliert. |
@@ -183,3 +183,18 @@ Langfristig nutzbare, modular erweiterbare Anwendung für Materialaufmaß, Mater
 ## 10. Status
 
 Die fachlichen Entscheidungen A01–A30 sind **vom Nutzer festgelegt**. Der vorliegende Text ist die konsolidierte **Spezifikation v0.1**, kein abschließend freigegebenes technisches Pflichtenheft. Das Architekturkonzept ist ein Vorschlag; offene Risiken sind explizit benannt. Die Implementierung beginnt nach Abnahme des ersten Inkrements.
+
+## 11. Verbindliche Erweiterung 0.2.1: benannte individuelle Aufmaße
+
+Der neue Nutzerauftrag [003](../tasks/003-named-measurements.md) erweitert den bisherigen Umfang und hat für das aktuelle Inkrement Vorrang vor dem früheren Stufenplan. Raumstruktur, Vorlagen und Kombinationen werden nicht vorgezogen.
+
+| ID | Erweiterung |
+|---|---|
+| A32 | Mehrere benannte, nachträglich umbenennbare Aufmaße je Projekt mit optionaler Kategorie; wieder öffnen, ergänzen und korrigieren. |
+| A33 | Projektverwaltung unter Projekt; Erfassung unter Aufmaß. Projektaktion „Aufmaß erfassen“ und Hauptmenü mit vorgelagerter Projektauswahl führen zur gleichen Aufmaßverwaltung. |
+| A34 | Individuelles Aufmaß: Suche/Kategorienfilter, Artikelauswahl, Stückzahl, Hinzufügen, Liste darunter. Alle passenden aktiven Standard-/Eigenartikel verfügbar, eigene Artikel in der App pflegbar. Kein primärer +1/−1-Katalog. Hinzufügen und Gesamtmengenkorrektur getrennt. |
+| A35 | Materialliste und CSV je Aufmaß sowie gemeinsame Baustellenliste aus allen Aufmaßen, jede Buchung genau einmal, Varianten getrennt. |
+| A36 | JSON sichert alle benannten Aufmaße einschließlich leerer, Buchungen und benötigte Artikel. Alte Formate bleiben importierbar. Migration erhält alle 0.2-Mengen als „Bisheriges Aufmaß“ sowie übrige Daten; Import und Migration atomar. |
+| A37 | Angemessener Abstand der JSON-/CSV-Schaltflächen unter Projekt sichern, auch auf iPhone-Breite. |
+
+Automatisierte Trennungs-, Summen-, Migrations-, Backup- und Navigationstests und Produktions-Build sind jetzt erforderlich. Ausführliche manuelle Funktionsabnahme folgt nach weiteren Gestaltungsrunden; reale iPhone-Prüfungen bleiben separat offen.

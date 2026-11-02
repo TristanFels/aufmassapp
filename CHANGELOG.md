@@ -1,5 +1,17 @@
 # Änderungsprotokoll
 
+## 0.2.1 · Benannte individuelle Aufmaße
+
+- Vier Hauptmenüpunkte: Projekt, Aufmaß, Artikel, Einstellungen. Projektaktion „Aufmaß erfassen“ führt zur Aufmaßverwaltung.
+- Mehrere Aufmaße je Baustelle mit frei änderbarem Namen und optionaler Kategorie; später wieder öffnen und ergänzen.
+- Individuelle Erfassung über Suche/Kategorienfilter, Artikelauswahl und Stückzahleingabe; Gesamtmengenkorrektur als getrennter Ablauf. Keine primäre +1/−1-Liste.
+- Materialliste/CSV je Aufmaß und gemeinsame Baustellenliste/CSV ohne Doppelzählung; Artikelvarianten bleiben getrennt.
+- JSON-Schema 3 sichert sämtliche Aufmaße (auch leere), Buchungen und referenzierte Artikel. Alte Schemata 1/2 bleiben lesbar; Import atomar inklusive aller Referenzumschreibungen.
+- Atomare Dexie-Migration 2 → 3: alte Projektbuchungen in „Bisheriges Aufmaß“, alle bisherigen Daten einschließlich Katalogpflege, Favoriten, Einstellungen und Importnamen bleiben erhalten.
+- Export-Schaltflächen mit flexiblem Abstand auch auf iPhone-Breite. Anforderungen, Datenmodell, Arbeitsregeln und neuer Auftrag 003 aktualisiert.
+- Räume, Aufmaßvorlagen, Materialkombinationen und automatische Wippen bleiben ausdrücklich verschoben. Reale iPhone-Abnahme ist weiterhin offen.
+
+
 ## 0.2.0 · Einfaches Materialaufmaß und lokaler Katalog
 
 - Bearbeitbarer Offline-Katalog mit 22 gelieferten Standardartikeln; Gira/System 55/Reinweiß glänzend für passende Varianten, Herdanschlussdose und Tellerleuchte neutral. Keine erfundenen Artikelnummern oder Preise.

@@ -15,6 +15,10 @@ async function createProject(page: Page, name: string): Promise<string> {
     .getByRole("button", { name: "Projekt erstellen", exact: true })
     .click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  await page
+    .getByRole("link", { name: "Aufmaß erfassen", exact: true })
+    .click();
+  await createSheet(page, "Individuell");
   return page.url();
 }
 
@@ -50,16 +54,47 @@ function materialRow(page: Page, name: string) {
     .getByRole("listitem", { name, exact: true });
 }
 
-async function openPicker(page: Page): Promise<void> {
-  const disclosure = page
-    .locator("summary")
-    .filter({ hasText: "Artikel erfassen" });
-  if (
-    !(await page
-      .getByLabel("Aufmaßartikel suchen", { exact: true })
-      .isVisible())
-  )
-    await disclosure.click();
+async function createSheet(page: Page, name: string) {
+  await page.getByLabel("Aufmaßname", { exact: true }).fill(name);
+  await page
+    .getByRole("button", { name: "Aufmaß erstellen", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+}
+async function add(
+  page: Page,
+  name: string,
+  quantity: string,
+  variant?: string,
+) {
+  await page.getByLabel("Aufmaßartikel suchen", { exact: true }).fill(name);
+  const picker = page.getByRole("list", { name: "Aufmaßartikel", exact: true });
+  await picker
+    .getByRole("button")
+    .filter({ hasText: variant ?? name })
+    .click();
+  await page.getByLabel("Weitere Stückzahl", { exact: true }).fill(quantity);
+  await page
+    .getByRole("button", { name: "Menge hinzufügen", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Menge hinzufügen", exact: true }),
+  ).toBeEnabled();
+}
+async function setTotal(page: Page, name: string, quantity: string) {
+  await page
+    .getByRole("button", {
+      name: `Gesamtmenge bearbeiten: ${name}`,
+      exact: true,
+    })
+    .click();
+  await page.getByLabel("Neue Gesamtmenge", { exact: true }).fill(quantity);
+  await page
+    .getByRole("button", { name: "Gesamtmenge setzen", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Neue Gesamtmenge", { exact: true }),
+  ).toHaveCount(0);
 }
 
 test("Startkatalog enthält 22 Artikel einschließlich SAT und startet Projekte ohne Vorgabemengen", async ({
@@ -113,16 +148,14 @@ test("Bestehende Version-0.1-Projekte, Design und Schnellzugriff bleiben beim Da
           ["projects", "settings"],
           "readwrite",
         );
-        transaction
-          .objectStore("projects")
-          .add({
-            id,
-            name: "Altes Testprojekt",
-            status: "active",
-            schemaVersion: 1,
-            createdAt: "2026-01-01T10:00:00.000Z",
-            updatedAt: "2026-01-01T10:00:00.000Z",
-          });
+        transaction.objectStore("projects").add({
+          id,
+          name: "Altes Testprojekt",
+          status: "active",
+          schemaVersion: 1,
+          createdAt: "2026-01-01T10:00:00.000Z",
+          updatedAt: "2026-01-01T10:00:00.000Z",
+        });
         transaction
           .objectStore("settings")
           .add({ key: "theme", value: "dark" });
@@ -150,11 +183,12 @@ test("Bestehende Version-0.1-Projekte, Design und Schnellzugriff bleiben beim Da
   await expect(
     page.getByRole("textbox", { name: "Projektname", exact: true }),
   ).toHaveValue("Altes Testprojekt");
+  await page
+    .getByRole("link", { name: "Aufmaß erfassen", exact: true })
+    .click();
   await expect(
-    page
-      .getByRole("region", { name: "Materialliste", exact: true })
-      .getByRole("listitem"),
-  ).toHaveCount(0);
+    page.getByText("Noch keine Aufmaße vorhanden.", { exact: true }),
+  ).toBeVisible();
   await page.getByRole("link", { name: "Artikel", exact: true }).click();
   await expect(
     page
@@ -240,60 +274,140 @@ test("Eigene Artikel lassen sich suchen, bearbeiten, favorisieren, deaktivieren 
   ).toBeVisible();
 });
 
-test("Plus, Hinzufügen und Gesamtmenge bleiben auch nach Offline-Neustart korrekt", async ({
+test("Vier Menüpunkte und beide Einstiege führen zu getrennten, wieder bearbeitbaren Aufmaßen", async ({
+  page,
+}) => {
+  const sheetURL = await createProject(page, "Mehrere Aufmaße");
+  const nav = page.getByRole("navigation", { name: "Hauptnavigation" });
+  await expect(nav.getByRole("link")).toHaveText([
+    "Projekt",
+    "Aufmaß",
+    "Artikel",
+    "Einstellungen",
+  ]);
+  await expect(
+    nav.getByRole("link", { name: "Aufmaß", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: /[+−]1/ })).toHaveCount(0);
+  await page
+    .getByLabel("Artikelkategorie filtern", { exact: true })
+    .selectOption("Steckdosen");
+  await add(page, "Steckdose", "3", "Steckdose ·");
+  await expect(
+    materialRow(page, "Steckdose").getByLabel("Gesamtmenge Steckdose", {
+      exact: true,
+    }),
+  ).toHaveText("3");
+  await page.getByLabel("Aufmaßname", { exact: true }).fill("Erstes umbenannt");
+  await page
+    .getByLabel("Aufmaßkategorie (optional)", { exact: true })
+    .fill("Wohnung");
+  await page
+    .getByRole("button", { name: "Aufmaß speichern", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Erstes umbenannt", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "Alle Aufmaße dieses Projekts", exact: false })
+    .click();
+  await createSheet(page, "Zweites");
+  await add(page, "Steckdose", "7", "Steckdose ·");
+  await nav.getByRole("link", { name: "Aufmaß", exact: true }).click();
+  await page
+    .getByRole("link", { name: "Mehrere Aufmaße", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("region", { name: "Gemeinsame Materialliste" })
+      .getByLabel("Gesamtmenge Steckdose", { exact: true }),
+  ).toHaveText("10");
+  await page
+    .getByRole("link", { name: "Erstes umbenannt · Wohnung", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Aufmaßkategorie (optional)", { exact: true }),
+  ).toHaveValue("Wohnung");
+  await setTotal(page, "Steckdose", "1");
+  await page.reload();
+  await expect(
+    materialRow(page, "Steckdose").getByLabel("Gesamtmenge Steckdose", {
+      exact: true,
+    }),
+  ).toHaveText("1");
+  await page
+    .getByRole("link", { name: "Alle Aufmaße dieses Projekts", exact: false })
+    .click();
+  await expect(
+    page
+      .getByRole("region", { name: "Gemeinsame Materialliste" })
+      .getByLabel("Gesamtmenge Steckdose", { exact: true }),
+  ).toHaveText("8");
+  await page.getByRole("link", { name: "Zweites", exact: true }).click();
+  await expect(
+    materialRow(page, "Steckdose").getByLabel("Gesamtmenge Steckdose", {
+      exact: true,
+    }),
+  ).toHaveText("7");
+  await page.goBack();
+  await page
+    .getByRole("link", {
+      name: "Gesamte Baustelle als CSV oder JSON sichern",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Individuelles Aufmaß" }),
+  ).toHaveCount(0);
+  const json = await page
+    .getByRole("button", { name: "JSON exportieren", exact: true })
+    .boundingBox();
+  const csv = await page
+    .getByRole("button", { name: "CSV exportieren", exact: true })
+    .boundingBox();
+  expect(
+    json &&
+      csv &&
+      (csv.y >= json.y + json.height + 8 || csv.x >= json.x + json.width + 8),
+  ).toBeTruthy();
+  await page
+    .getByRole("link", { name: "Aufmaß erfassen", exact: true })
+    .click();
+  await page
+    .getByRole("link", { name: "Erstes umbenannt · Wohnung", exact: true })
+    .click();
+  expect(page.url()).toBe(sheetURL);
+});
+
+test("Hinzufügen und Gesamtkorrektur bleiben nach Offline-Kaltstart erhalten", async ({
   page,
   context,
 }) => {
-  const projectURL = await createProject(page, "Offline-Aufmaß");
+  const url = await createProject(page, "Offline-Aufmaß");
   await expect(page.getByText("Offline bereit", { exact: true })).toBeVisible();
-  await openPicker(page);
-  await page
-    .getByRole("button", { name: "1 Stück Steckdose hinzufügen", exact: true })
-    .click();
-  const row = materialRow(page, "Steckdose");
-  await expect(
-    row.getByLabel("Gesamtmenge Steckdose", { exact: true }),
-  ).toHaveText("1");
-  await row
-    .getByRole("button", { name: "Menge bearbeiten: Steckdose", exact: true })
-    .click();
-  await page.getByLabel("Menge für Steckdose", { exact: true }).fill("5");
-  await page
-    .getByRole("button", { name: "Menge hinzufügen", exact: true })
-    .click();
-  await expect(
-    row.getByLabel("Gesamtmenge Steckdose", { exact: true }),
-  ).toHaveText("6");
-  await row
-    .getByRole("button", { name: "Menge bearbeiten: Steckdose", exact: true })
-    .click();
-  await page.getByLabel("Menge für Steckdose", { exact: true }).fill("3");
-  await page
-    .getByRole("button", { name: "Gesamtmenge setzen", exact: true })
-    .click();
-  await expect(
-    row.getByLabel("Gesamtmenge Steckdose", { exact: true }),
-  ).toHaveText("3");
+  await add(page, "Steckdose", "6", "Steckdose ·");
+  await setTotal(page, "Steckdose", "3");
   await context.setOffline(true);
   await page.reload();
   await expect(
-    row.getByLabel("Gesamtmenge Steckdose", { exact: true }),
+    materialRow(page, "Steckdose").getByLabel("Gesamtmenge Steckdose", {
+      exact: true,
+    }),
   ).toHaveText("3");
-  await openPicker(page);
-  await page
-    .getByRole("button", { name: "1 Stück Steckdose abziehen", exact: true })
-    .click();
+  await add(page, "Steckdose", "2", "Steckdose ·");
   await expect(
-    row.getByLabel("Gesamtmenge Steckdose", { exact: true }),
-  ).toHaveText("2");
+    materialRow(page, "Steckdose").getByLabel("Gesamtmenge Steckdose", {
+      exact: true,
+    }),
+  ).toHaveText("5");
   await page.close();
   const reopened = await context.newPage();
-  await reopened.goto(projectURL);
+  await reopened.goto(url);
   await expect(
     materialRow(reopened, "Steckdose").getByLabel("Gesamtmenge Steckdose", {
       exact: true,
     }),
-  ).toHaveText("2");
+  ).toHaveText("5");
   expect(
     await reopened.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -301,117 +415,106 @@ test("Plus, Hinzufügen und Gesamtmenge bleiben auch nach Offline-Neustart korre
   ).toBe(true);
 });
 
-test("Gleich benannte Varianten bleiben getrennt und Deaktivieren erhält die Materialliste", async ({
+test("Gleich benannte eigene Varianten bleiben getrennt und Deaktivierung erhält die Aufmaßliste", async ({
   page,
 }) => {
-  await createArticle(page, "E2E Variantensteckdose", "Reinweiß glänzend");
-  await createArticle(page, "E2E Variantensteckdose", "Schwarz");
-  const projectURL = await createProject(page, "Varianten-Aufmaß");
-  await openPicker(page);
+  await createArticle(page, "E2E Variante", "Weiß");
+  await createArticle(page, "E2E Variante", "Schwarz");
+  const url = await createProject(page, "Varianten-Aufmaß");
+  await add(page, "E2E Variante", "2", "Weiß");
+  await add(page, "E2E Variante", "4", "Schwarz");
+  await expect(materialRow(page, "E2E Variante")).toHaveCount(2);
+  await page.getByRole("link", { name: "Artikel", exact: true }).click();
   await page
-    .getByLabel("Aufmaßartikel suchen", { exact: true })
-    .fill("E2E Variantensteckdose");
-  const picker = page.getByRole("list", { name: "Aufmaßartikel", exact: true });
-  await picker
-    .getByRole("listitem", { name: "E2E Variantensteckdose", exact: true })
-    .filter({ hasText: "Reinweiß glänzend" })
-    .getByRole("button", {
-      name: "1 Stück E2E Variantensteckdose hinzufügen",
-      exact: true,
-    })
-    .click();
-  await picker
-    .getByRole("listitem", { name: "E2E Variantensteckdose", exact: true })
-    .filter({ hasText: "Schwarz" })
-    .getByRole("button", {
-      name: "1 Stück E2E Variantensteckdose hinzufügen",
-      exact: true,
-    })
-    .click();
-  await expect(materialRow(page, "E2E Variantensteckdose")).toHaveCount(2);
-  await page.goto(`${base}#/articles`);
-  const white = page
     .getByRole("list", { name: "Artikelkatalog", exact: true })
-    .getByRole("listitem", { name: "E2E Variantensteckdose", exact: true })
-    .filter({ hasText: "Reinweiß glänzend" });
-  await white
+    .getByRole("listitem", { name: "E2E Variante", exact: true })
+    .filter({ hasText: "Weiß" })
     .getByRole("button", {
-      name: "Artikel deaktivieren: E2E Variantensteckdose",
+      name: "Artikel deaktivieren: E2E Variante",
       exact: true,
     })
     .click();
-  await page.goto(projectURL);
-  await expect(materialRow(page, "E2E Variantensteckdose")).toHaveCount(2);
-  await expect(
-    materialRow(page, "E2E Variantensteckdose")
-      .filter({ hasText: "Reinweiß glänzend" })
-      .getByLabel("Gesamtmenge E2E Variantensteckdose", { exact: true }),
-  ).toHaveText("1");
-  await openPicker(page);
+  await page.goto(url);
+  await expect(materialRow(page, "E2E Variante")).toHaveCount(2);
   await page
     .getByLabel("Aufmaßartikel suchen", { exact: true })
-    .fill("E2E Variantensteckdose");
+    .fill("E2E Variante");
   await expect(
-    picker.getByRole("button", {
-      name: "1 Stück E2E Variantensteckdose hinzufügen",
-      exact: true,
-    }),
+    page
+      .getByRole("list", { name: "Aufmaßartikel", exact: true })
+      .getByRole("button"),
   ).toHaveCount(1);
 });
 
-test("CSV schützt Formeln und Projekt-JSON stellt eigenes Material samt Mengen auf frischem Gerät wieder her", async ({
+test("Aufmaß-CSV und Projekt-JSON exportieren eigene Artikel und stellen alle Aufmaße auf frischem Gerät wieder her", async ({
   page,
   browser,
 }, testInfo) => {
   const name = '=E2E; "Formel"';
   await createArticle(page, name, "Reinweiß glänzend", 'Prüfung; "CSV"');
-  const projectURL = await createProject(page, "Export-Aufmaß");
-  await openPicker(page);
-  await page.getByLabel("Aufmaßartikel suchen", { exact: true }).fill(name);
-  await page
-    .getByRole("button", { name: `1 Stück ${name} hinzufügen`, exact: true })
-    .click();
-  await expect(
-    materialRow(page, name).getByLabel(`Gesamtmenge ${name}`, { exact: true }),
-  ).toHaveText("1");
-  await page
-    .getByRole("button", { name: `1 Stück ${name} hinzufügen`, exact: true })
-    .click();
-  await expect(
-    materialRow(page, name).getByLabel(`Gesamtmenge ${name}`, { exact: true }),
-  ).toHaveText("2");
+  await createProject(page, "Export-Aufmaß");
+  await add(page, name, "2");
   const csvDownload = page.waitForEvent("download");
   await page
-    .getByRole("button", { name: "CSV exportieren", exact: true })
+    .getByRole("button", { name: "Aufmaß-CSV exportieren", exact: true })
     .click();
   const csvPath = testInfo.outputPath("material.csv");
   await (await csvDownload).saveAs(csvPath);
   const csv = await readFile(csvPath, "utf8");
   expect(csv.charCodeAt(0)).toBe(0xfeff);
   expect(csv).toContain(
-    '"Bezeichnung";"Kategorie";"Hersteller";"Serie";"Farbe";"Einheit";"Menge"\r\n',
-  );
-  expect(csv).toContain(
     `"'=E2E; ""Formel""";"Prüfung; ""CSV""";"Gira";"System 55";"Reinweiß glänzend";"Stück";2\r\n`,
   );
+  await page
+    .getByRole("link", { name: "Alle Aufmaße dieses Projekts", exact: false })
+    .click();
+  await createSheet(page, "Leeres Aufmaß");
+  await page
+    .getByRole("link", { name: "Alle Aufmaße dieses Projekts", exact: false })
+    .click();
+  await page
+    .getByRole("link", {
+      name: "Gesamte Baustelle als CSV oder JSON sichern",
+      exact: true,
+    })
+    .click();
+  const csvAllDownload = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "CSV exportieren", exact: true })
+    .click();
+  const csvAllPath = testInfo.outputPath("baustelle.csv");
+  await (await csvAllDownload).saveAs(csvAllPath);
+  expect(await readFile(csvAllPath, "utf8")).toBe(csv);
   const jsonDownload = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "JSON exportieren", exact: true })
     .click();
-  const jsonPath = testInfo.outputPath("projekt-mit-material.json");
+  const jsonPath = testInfo.outputPath("projekt.json");
   await (await jsonDownload).saveAs(jsonPath);
+  const backup = JSON.parse(await readFile(jsonPath, "utf8"));
+  expect(backup.schemaVersion).toBe(3);
+  expect(backup.namedMeasurements).toHaveLength(2);
   const fresh = await browser.newContext({
     viewport: { width: 390, height: 844 },
   });
   try {
     const restored = await fresh.newPage();
-    await restored.goto(`${new URL(projectURL).origin}${base}#/projects`);
+    await restored.goto(`${new URL(page.url()).origin}${base}#/projects`);
     await restored
       .getByLabel("Projekt-JSON importieren", { exact: true })
       .setInputFiles(jsonPath);
     await restored
       .getByRole("region", { name: "Aktive Projekte", exact: true })
       .getByRole("link", { name: /^Export-Aufmaß \(Import\) / })
+      .click();
+    await restored
+      .getByRole("link", { name: "Aufmaß erfassen", exact: true })
+      .click();
+    await expect(
+      restored.getByRole("link", { name: "Leeres Aufmaß", exact: true }),
+    ).toBeVisible();
+    await restored
+      .getByRole("link", { name: "Individuell", exact: true })
       .click();
     await expect(
       materialRow(restored, name).getByLabel(`Gesamtmenge ${name}`, {
@@ -424,7 +527,7 @@ test("CSV schützt Formeln und Projekt-JSON stellt eigenes Material samt Mengen 
         exact: true,
       }),
     ).toHaveText("2");
-    await restored.goto(`${new URL(projectURL).origin}${base}#/articles`);
+    await restored.getByRole("link", { name: "Artikel", exact: true }).click();
     await expect(
       restored
         .getByRole("list", { name: "Artikelkatalog", exact: true })

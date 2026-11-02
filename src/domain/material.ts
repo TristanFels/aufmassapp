@@ -36,6 +36,7 @@ export type ArticleSnapshot = Pick<
 export interface MeasurementEntry {
   id: string;
   projectId: string;
+  measurementId?: string; // Absent only in legacy schema-2 backups.
   articleId: string;
   articleSnapshot: ArticleSnapshot;
   delta: number;
@@ -186,7 +187,10 @@ export function isMeasurementEntry(value: unknown): value is MeasurementEntry {
       "delta",
       "kind",
       "createdAt",
+      ...(Object.hasOwn(value, "measurementId") ? ["measurementId"] : []),
     ]) &&
+    (!Object.hasOwn(value, "measurementId") ||
+      isMaterialId(value.measurementId)) &&
     isMaterialId(value.id) &&
     isMaterialId(value.projectId) &&
     isMaterialId(value.articleId) &&
@@ -229,6 +233,7 @@ export function validateQuantity(quantity: number, positive = false): void {
 /** Aggregate stable variant IDs; names never identify material. */
 export function aggregateEntries(
   entries: readonly MeasurementEntry[],
+  maxQuantity = MAX_QUANTITY,
 ): MaterialTotal[] {
   const totals = new Map<string, MaterialTotal>();
   for (const entry of entries) {
@@ -246,7 +251,14 @@ export function aggregateEntries(
       });
     }
   }
-  for (const total of totals.values()) validateQuantity(total.quantity);
+  for (const total of totals.values()) {
+    if (
+      !Number.isSafeInteger(total.quantity) ||
+      total.quantity < 0 ||
+      total.quantity > maxQuantity
+    )
+      throw new Error("Ungültige Materialsumme.");
+  }
   return [...totals.values()].sort((a, b) =>
     a.snapshot.name.localeCompare(b.snapshot.name, "de"),
   );

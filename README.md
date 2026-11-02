@@ -1,12 +1,14 @@
-# Baustellenaufmaß · Version 0.2
+# Baustellenaufmaß · Version 0.2.1
 
-Lokale, für das iPhone ausgelegte Baustellenaufmaß-App als Progressive Web App (PWA). Version 0.2 ergänzt die Projektverwaltung aus [Auftrag 001](tasks/001-foundation.md) um den in [Auftrag 002](tasks/002-measurement.md) beschriebenen bearbeitbaren Artikelkatalog und das einfache Materialaufmaß.
+Lokale, für das iPhone ausgelegte Baustellenaufmaß-App als Progressive Web App (PWA). Version 0.2.1 erweitert den Katalog und die Materialerfassung aus [Auftrag 002](tasks/002-measurement.md) um [benannte individuelle Aufmaße](tasks/003-named-measurements.md). Die Hauptnavigation lautet Projekt, Aufmaß, Artikel, Einstellungen.
 
 ## Funktionen
 
 - Projekte anlegen, öffnen, umbenennen, archivieren und reaktivieren; aktive und archivierte Projekte getrennt anzeigen, zuletzt geöffnetes Projekt direkt aufrufen.
 - Lokaler, projektübergreifender Katalog mit 22 Startartikeln, Kategorien, Suche und einfachen globalen Favoriten. Eigene Artikel offline anlegen und bearbeiten; Artikel deaktivieren und reaktivieren.
-- Pro Projekt Artikel mit **+1** oder einer ganzen positiven Menge erfassen. **Weitere Menge hinzufügen** erhöht die vorhandene Menge; **Gesamtmenge ändern** ersetzt die angezeigte Summe durch eine zusätzliche Korrekturbuchung. Minus reduziert um eins; Mengen unter null sind ausgeschlossen.
+- Mehrere benannte Aufmaße je Projekt mit optionaler Kategorie anlegen, wieder öffnen und umbenennen. Unter „Aufmaß“ ein Projekt und dann ein Aufmaß wählen; alternativ im Projekt „Aufmaß erfassen“ öffnen.
+- Im individuellen Aufmaß Artikel über Suche/Kategorienfilter auswählen, eine zusätzliche Stückzahl eingeben und hinzufügen. Die Liste darunter zeigt die bisherigen Mengen. **Gesamtmenge bearbeiten** öffnet eine getrennte Korrektureingabe; alte Buchungen bleiben erhalten.
+- Materialliste und CSV je Aufmaß; gemeinsame Materialliste aller Aufmaße in der Aufmaßverwaltung, Projekt-CSV unter „Projekt sichern“. Jede Buchung zählt genau einmal.
 - Materialliste nach stabiler Artikel-/Varianten-ID mit eingefrorenen Bezeichnungen und Ausführungen. Jede tatsächliche Mengenänderung wird als eigene Buchung gespeichert. Archivierte Projekte erlauben weiterhin Anzeige und Export, aber keine Mengenänderung.
 - Einzelprojekt als versionierte JSON-Datei einschließlich seiner Aufmaßbuchungen und referenzierten Artikel sichern und wiederherstellen; erster CSV-Export der Materialliste.
 - Automatisches lokales Speichern über Dexie/IndexedDB, Designwahl System/Hell/Dunkel und Offline-App-Shell mit Installationsmanifest und Icons.
@@ -15,7 +17,7 @@ Materialkombinationen, automatische Wippenzuordnung, Bereichsbäume, Fortschritt
 
 ## Startkatalog und eigene Artikel
 
-Alle Mengen haben zunächst die Einheit **Stück**; zulässig sind ganze Mengen bis 1.000.000. Der Startkatalog übernimmt die vom Nutzer gelieferte Liste ohne erfundene Artikelnummern oder Preise:
+Alle Mengen haben zunächst die Einheit **Stück**; zulässig sind ganze Mengen bis 1.000.000 je Artikel und Aufmaß. Projektsummen können darüber liegen. Der Startkatalog übernimmt die vom Nutzer gelieferte Liste ohne erfundene Artikelnummern oder Preise:
 
 | Kategorie | Startartikel |
 |---|---|
@@ -65,7 +67,7 @@ Vitest-Prüfungen decken Projektoperationen, Katalogpflege/Seeds, Mengenbuchunge
 npx playwright install chromium
 ```
 
-Die Befehle beschreiben die Prüfungen; die tatsächlich ausgeführten Tests und deren Ergebnisse stehen im jeweiligen Änderungsbericht. Browserprüfungen ersetzen keinen Gerätetest in iOS Safari oder als installierte iPhone-PWA.
+Die tatsächlich ausgeführten Tests und offenen Geräteprüfungen stehen im [Prüfbericht 0.2.1](docs/VALIDATION-0.2.1.md). Browserprüfungen ersetzen keinen Gerätetest in iOS Safari oder als installierte iPhone-PWA.
 
 ## GitHub Pages einrichten
 
@@ -90,11 +92,11 @@ Die vorhandene Pages-Konfiguration bleibt in Version 0.2 erhalten. Änderungen a
 
 Projekte, Katalog, Buchungen und Einstellungen bleiben lokal im Browserprofil bzw. im Speicher der installierten PWA. GitHub Pages liefert nur statische App-Dateien; es gibt kein Backend und keine automatische Cloud-Synchronisierung. Safari und eine installierte PWA können getrennte Speicher haben. Für die Arbeit stets denselben Einstieg verwenden und Übertragung mit JSON testen.
 
-**Vor dem Wechsel von 0.1/0.1.1 zu 0.2 vorhandene Projekte extern als JSON sichern.** Dann online die Aktualisierung laden und angebotene Aktualisierungen erst nach dem Speichern offener Formulare bestätigen. Die Datenbankmigration ergänzt Katalog und Buchungstabellen; bestehende Projekte, Designwahl und letzter Projektzugriff bleiben erhalten. Bei Migrationsfehlern nicht die Website-Daten löschen: Fehlermeldung festhalten und die externen Sicherungen aufbewahren. Eine 0.1-Sicherung enthält nur Projektmetadaten, da es dort noch keine Aufmaßmengen gab.
+**Vor dem Update auf 0.2.1 vorhandene Projekte extern als JSON sichern.** Dann online die Aktualisierung laden und angebotene Aktualisierungen erst nach dem Speichern offener Formulare bestätigen. Die versionierte Migration auf Dexie-Schema 3 ordnet alle vorhandenen 0.2-Buchungen eines Projekts einem „Bisheriges Aufmaß“ zu. Projekte ohne Buchungen bleiben ohne Aufmaß. Projektdaten einschließlich Importnamen, Buchungs-IDs und Snapshots, Katalogpflege, Favoriten, Einstellungen und letzter Projektzugriff bleiben erhalten. Der gesamte Upgrade läuft atomar; bei Fehlern bleiben auch Schema und alte Daten unverändert. Bei Migrationsfehlern nicht die Website-Daten löschen: Fehlermeldung festhalten und die externen Sicherungen aufbewahren. Eine 0.1-Sicherung enthält nur Projektmetadaten, da es dort noch keine Aufmaßmengen gab.
 
 ### Projekt-JSON
 
-Neue Exporte verwenden Sicherungsschema **2** und enthalten genau ein Projekt, dessen Aufmaßbuchungen und die dafür referenzierten Artikel – auch eigene Artikel und Buchungen mit inzwischen auf null korrigierter Summe. Unbenutzte Katalogartikel, andere Projekte und die Designwahl gehören nicht dazu. Dies ist keine vollständige App-Sicherung. Alte Projektdateien aus 0.1/0.1.1 mit Sicherungsschema 1 bleiben importierbar.
+Neue Exporte verwenden Sicherungsschema **3** und enthalten genau ein Projekt, alle benannten Aufmaße einschließlich leerer Aufmaße, deren Buchungen und die dafür referenzierten Artikel – auch eigene Artikel und Buchungen mit inzwischen auf null korrigierter Summe. Unbenutzte Katalogartikel, andere Projekte und die Designwahl gehören nicht dazu. Dies ist keine vollständige App-Sicherung. Alte Projektdateien mit Sicherungsschema 1 und 2 bleiben importierbar. Schema-2-Buchungen werden beim Import einem „Bisheriges Aufmaß“ zugeordnet.
 
 Projekt-JSON-Dateien sind auf 16 MiB begrenzt. Dies berücksichtigt die zusätzlichen Buchungen in Version 0.2. Überschreitet eine Sicherung das Limit, wird dies als Fehler angezeigt und keine unvollständige Datei erzeugt; bestehende Daten bleiben erhalten. CSV ersetzt keine wiederherstellbare JSON-Sicherung.
 
@@ -106,22 +108,18 @@ JSON nach dem Export tatsächlich außerhalb des Browsers aufbewahren, auf dem i
 
 ### Material-CSV
 
-Im Projekt **CSV exportieren** wählen. Die Datei enthält Bezeichnung, Kategorie, Hersteller, Serie, Farbe, Einheit und Menge aus dem eingefrorenen Projektstand. Zeilen mit Menge null werden ausgelassen. Format: UTF-8 mit BOM, Semikolon als Trennzeichen, CRLF-Zeilenenden; Textfelder werden in Anführungszeichen gesetzt und enthaltene Anführungszeichen verdoppelt. Formelanfänge wie `=`, `+`, `-` und `@` werden mit einem führenden Apostroph entschärft. CSV ist eine lesbare Materialliste, kein wieder importierbares Projektbackup. Die Darstellung in der auf dem iPhone verwendeten Tabellen-App zusätzlich prüfen.
+Für das einzelne Aufmaß **Aufmaß-CSV exportieren** wählen; im Projekt **CSV exportieren** für die gemeinsame Baustellenliste. Die Datei enthält Bezeichnung, Kategorie, Hersteller, Serie, Farbe, Einheit und Menge aus dem eingefrorenen Projektstand. Zeilen mit Menge null werden ausgelassen. Format: UTF-8 mit BOM, Semikolon als Trennzeichen, CRLF-Zeilenenden; Textfelder werden in Anführungszeichen gesetzt und enthaltene Anführungszeichen verdoppelt. Formelanfänge wie `=`, `+`, `-` und `@` werden mit einem führenden Apostroph entschärft. CSV ist eine lesbare Materialliste, kein wieder importierbares Projektbackup. Die Darstellung in der auf dem iPhone verwendeten Tabellen-App zusätzlich prüfen.
 
 ## Manueller iPhone-Abnahmetest
 
 Mit unkritischen Testprojekten auf der veröffentlichten HTTPS-Adresse durchführen und iOS-Version sowie Ergebnis notieren:
 
-1. **Upgrade von 0.1/0.1.1:** Vorher Projekt-JSON extern sichern, Projektnamen, Archivstatus, Designwahl und letzten Projektzugriff notieren. Online auf 0.2 aktualisieren. Bestehende Projekte und Einstellungen müssen erhalten bleiben; der Katalog muss ohne Zurücksetzen der App erscheinen. Alte JSON-Datei importieren und Projektmetadaten sowie Importnamen prüfen.
-2. **Installation und Offline-Kaltstart:** Safari online öffnen, vollständiges Laden und Offlinebereitschaft abwarten. Über **Teilen → Zum Home-Bildschirm** installieren. Aus dem Home-Bildschirm starten, Icon, Safe Areas und Touchflächen in Hoch-/Querformat prüfen. App vollständig schließen, Flugmodus aktivieren, WLAN zusätzlich ausschalten und App neu starten. Oberfläche, Katalog und Projekte müssen vorhanden sein.
-3. **Katalogpflege:** Offline eigenen Artikel mit Kategorie, Hersteller, Serie und Farbe anlegen; suchen, Kategorie filtern und als Favorit markieren. Name ändern, deaktivieren, App schließen/öffnen und Zustand prüfen. Reaktivieren. Einen gleichnamigen Artikel mit anderer Ausführung anlegen; beide müssen unterscheidbar bleiben. Ein Deaktivieren oder Bearbeiten der Startartikel muss auch nach Neustart erhalten bleiben.
-4. **Mengen:** Projekt öffnen und einen Artikel zweimal mit +1 erfassen: Summe 2. Weitere Menge 3 hinzufügen: Summe 5. Gesamtmenge auf 4 setzen: Summe 4. Minus: Summe 3. Auf null setzen und weiteres Minus versuchen: keine negative Menge. Ungültige oder gebrochene Eingabe darf nicht gespeichert werden. Tastatur und große Touchflächen auf dem iPhone prüfen.
-5. **Schutz vorhandener Aufmaße:** Bereits erfassten Artikel im Katalog umbenennen; die Projektliste muss ihren bisherigen Namen/Ausführungsstand behalten. Änderung von Hersteller/Serie/Farbe muss für verwendete Artikel abgelehnt werden. Deaktivieren darf die Menge nicht entfernen und keine neue Erhöhung erlauben. Projekt archivieren: Materialliste und Exporte bleiben zugänglich, Mengenänderungen sind gesperrt; nach Reaktivieren wieder erfassen.
-6. **Persistenz:** Offline erfasste Mengen, Katalogänderungen und Projektstatus nach Reload sowie vollständigem Schließen/Öffnen prüfen. Zwischen Projekten wechseln und Schnellzugriff auf das zuletzt geöffnete testen. Hell/Dunkel/System wählen, Neustart prüfen und bei System laufenden iOS-Designwechsel testen.
-7. **CSV in Dateien:** Materialliste exportieren, tatsächlich in „Dateien“ speichern und mit der vorgesehenen Tabellen-App öffnen. Umlaute, Semikolon-/Anführungszeichen in Testnamen, Ausführung und Mengen prüfen. Namen mit Formelanfang müssen Text bleiben. CSV ersetzt den JSON-Export nicht.
-8. **JSON in frischer Installation:** Projekt mit eigenem Artikel und mehreren Korrekturen als JSON extern sichern. Auf einem zweiten Gerät oder in einem frischen, getrennten Testprofil importieren: Artikelstand, Status und Mengen müssen übereinstimmen. Dieselbe Datei erneut importieren: unterscheidbarer Importname und neue Projektkopie, Original unverändert. Eine kaputte Datei versuchen; kein Teilimport. Keine Website-Daten einer Arbeitsinstallation ohne extern gesicherte und überprüfte Dateien löschen.
-9. **App-Update:** Bei einer späteren neuen Bereitstellung online Update-Hinweis prüfen, offene Eingaben zunächst speichern oder verwerfen und Update bestätigen. Mengen, eigene Artikel, Favoriten und Deaktivierungen kontrollieren; danach erneut einen Offline-Kaltstart durchführen.
+1. **Upgrade von 0.2:** Vorher alle Testprojekte als JSON extern sichern. Zwei Projekte mit Buchungen/Korrekturen, ein archiviertes/importiertes Projekt, eigene Katalogänderungen, Favoriten und Design notieren. Online aktualisieren. Unter jedem betroffenen Projekt muss „Bisheriges Aufmaß“ mit exakt denselben Mengen erscheinen. Keine Websitedaten löschen. Alte JSON-Schemata 1 und 2 separat importieren.
+2. **Installation/Offline:** Safari online öffnen, „Offline bereit“ abwarten und über Teilen → Zum Home-Bildschirm installieren. Nach vollständigem Schließen im Flugmodus (WLAN aus) erneut starten. Projekte, Aufmaße und Katalog müssen verfügbar sein. Updatehinweis und Wechsel von alter zu neuer App-Shell zusätzlich prüfen.
+3. **Navigation und Touch:** Die vier Menüpunkte, beide Aufmaßeinstiege, Zurücknavigation und direkte Links prüfen. Zwei benannte Aufmaße mit optionaler Kategorie anlegen; wieder öffnen und umbenennen. Große Touchflächen, Scrollen, Safe Areas und fehlenden horizontalen Überlauf in Hoch-/Querformat prüfen.
+4. **Erfassung/Korrektur:** Artikel suchen oder Kategorie filtern, auswählen, 3 Stück hinzufügen, weitere 2 Stück hinzufügen: 5. Über „Gesamtmenge bearbeiten“ auf 4 setzen. Im zweiten Aufmaß 7 Stück desselben Artikels: Baustellensumme 11. Erstes Aufmaß auf 0 korrigieren: Baustellensumme 7. Nummerntastatur, leere/ungültige Eingaben und nach Speichern Schließen/Neustart prüfen. Verschiedene Farben bleiben getrennt. Archivierte Projekte erlauben keine Erfassung.
+5. **Eigene Artikel:** Offline Artikel anlegen, bearbeiten, favorisieren, deaktivieren/reaktivieren. Alle passenden aktiven Standard- und eigenen Artikel müssen auswählbar sein. Deaktivierte Artikel behalten ihre bisherigen Mengen; andere Ausführungen werden als neue Artikel angelegt.
+6. **Dateien:** Aufmaß-CSV, Projekt-CSV und Projekt-JSON über Safari/PWA wirklich in „Dateien“ sichern. Abstand zwischen JSON-/CSV-Schaltflächen, Freigabedialog und CSV in der Ziel-Tabellenapp prüfen. Projekt-JSON auf frischem Browserprofil importieren: alle Aufmaßnamen/Kategorien, leere Aufmaße, Buchungen und eigenen referenzierten Artikel vergleichen; Importkennzeichnung und Nummerierung prüfen. Ungültige JSON darf nichts verändern.
+7. **Design:** System/Hell/Dunkel nach Neustart prüfen; Lesbarkeit und Kontrast mit Tastatur sowie bei Geräteausrichtung prüfen.
 
-Ein tatsächlicher iPhone-Offline-, Installations- oder Upgrade-Test ist durch die Cloud-Entwicklung nicht bestätigt. Insbesondere iOS-Dateiauswahl/-download, Standalone-Kaltstart, PWA-Speicher und Tabellen-App-Verhalten müssen auf dem Gerät abgenommen werden.
-
-Weitere Struktur- und Versionshinweise: [ARCHITECTURE.md](ARCHITECTURE.md), [CHANGELOG.md](CHANGELOG.md).
+Die ausführliche manuelle Funktionsabnahme folgt nach den weiteren Gestaltungsrunden. Diese Geräteprüfungen sind offen; automatisierte Chromium-Tests bestätigen kein iOS-Safari-Verhalten.
