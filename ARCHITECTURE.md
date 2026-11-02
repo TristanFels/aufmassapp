@@ -1,53 +1,80 @@
-# Architektur · Version 0.1
+# Architektur · Version 0.2
 
 ## Geltungsbereich
 
-Implementiert wird ausschließlich [Entwicklungsauftrag 001](tasks/001-foundation.md). [REQUIREMENTS.md](docs/REQUIREMENTS.md) beschreibt den langfristigen Umfang; [DATA_MODEL.md](docs/DATA_MODEL.md) bleibt ein Entwurf für spätere Erweiterungen. Bei Abweichungen begrenzt der engere Entwicklungsauftrag das aktuelle Inkrement.
+Version 0.2 baut auf [Entwicklungsauftrag 001](tasks/001-foundation.md) auf und ergänzt den freigegebenen Umfang aus [Entwicklungsauftrag 002](tasks/002-measurement.md). [REQUIREMENTS.md](docs/REQUIREMENTS.md) beschreibt das langfristige Produkt; [DATA_MODEL.md](docs/DATA_MODEL.md) bleibt ein Entwurf für spätere Stufen. Materialkombinationen, Bereichsbäume, Planung, automatische Wippenzuordnung, Preise, Firmenartikelnummern, PDF, umfassende Backups und Cloud-Synchronisierung werden nicht vorgezogen.
 
-React und TypeScript bilden die Oberfläche, Vite erstellt statische Dateien. IndexedDB mit Dexie speichert Projekte und Einstellungen lokal. `vite-plugin-pwa` erzeugt Manifest und Service Worker. Es gibt keinen Anwendungsserver, keine Anmeldung und keine Remote-Datenhaltung.
+React und TypeScript bilden die Oberfläche, Vite erstellt statische Dateien. IndexedDB mit Dexie speichert Projekte, Katalog, Buchungen und Einstellungen lokal. `vite-plugin-pwa` erzeugt Manifest und Service Worker. Es gibt keinen Anwendungsserver, keine Anmeldung und keine Remote-Datenhaltung.
 
 ## Schichten und Zuständigkeiten
 
-- `src/app/`: Navigation, Ansichten und Designanbindung. Ansichten rufen Operationen der Datenzugriffsschicht auf; sie verändern keine Dexie-Tabellen unmittelbar.
-- `src/domain/`: Projekt- und Einstellungs-Typen, Versionsangaben und Validierung des öffentlichen JSON-Formats.
-- `src/data/`: versioniertes Datenbankschema, Projektoperationen, Einstellungen und atomarer Import.
-- `src/platform/`: browserabhängige Funktionen wie Datei-Download und PWA-Lebenszyklus.
-- Tests prüfen Fach-/Datenoperationen mit Vitest und `fake-indexeddb` sowie die gebaute Anwendung mit Playwright.
+- `src/app/`: Navigation, Projekt-/Katalogansichten und Designanbindung. Ansichten rufen Repository-Operationen auf und verändern keine Dexie-Tabellen unmittelbar.
+- `src/domain/project.ts`: Projektmodell, App-/Schema-Versionen und Validierung der JSON-Projektsicherung.
+- `src/domain/material.ts`: konkrete Artikelvarianten, eingefrorene Artikelstände, Mengenbuchungen, Validierung und Aggregation.
+- `src/domain/csv.ts`: frameworkunabhängiger CSV-Export mit Maskierung und Schutz gegen Tabellenformeln.
+- `src/domain/importName.ts`: eindeutige, wiedererkennbare Importnamen.
+- `src/data/`: versioniertes Dexie-Schema, Projekt-/Materialoperationen, Startkatalog und atomarer Import.
+- `src/platform/`: browserabhängiger PWA-Lebenszyklus.
+- Tests prüfen Daten-/Fachoperationen mit Vitest und `fake-indexeddb` sowie die gebaute App mit Playwright.
 
-Die konkrete Zuordnung einzelner UI-Hilfen darf innerhalb dieser Grenzen kompakt bleiben. Es werden keine leeren Module oder Tabellen für spätere Funktionen angelegt. Künftige Aufmaßbuchungen und Summen müssen getrennte Fachoperationen erhalten; es gibt in 0.1 noch keine Materialdaten, Mengenlogik oder Änderungshistorie.
+Es werden keine leeren Tabellen oder Module für spätere Funktionen angelegt. Aufmaßsummen sind von gespeicherten Buchungen abgeleitet; eine spätere gezielte Korrekturhistorie kann darauf aufbauen, ohne jetzt eine Historienoberfläche oder Undo/Redo einzuführen.
 
-## Persistenz und Versionierung
+## Lokales Datenmodell
 
-Projekte verwenden unveränderliche, zufällig erzeugte IDs statt des Namens als Identität. Ein Projekt speichert `id`, `name`, `status`, `createdAt`, `updatedAt` und `schemaVersion`. Statuswerte sind aktiv oder archiviert. Änderungen werden erst nach erfolgreicher IndexedDB-Operation als gespeichert behandelt; Fehler müssen sichtbar bleiben.
+### Projekte und Einstellungen
 
-Die Dexie-Datenbank beginnt mit Schema-Version 1 und getrennten Tabellen für Projekte und Einstellungen. Das zuletzt geöffnete Projekt und die Designwahl werden als Einstellungen gespeichert. Das Design ist standardmäßig `system`; `light` und `dark` übersteuern die Betriebssystemvorgabe. Bei `system` wird auf Änderungen von `prefers-color-scheme` reagiert.
+Ein Projekt speichert unveränderliche zufällige `id`, `name`, `status`, `createdAt`, `updatedAt` und `schemaVersion`. Status ist `active` oder `archived`. Projektmetadaten behalten Schema 1. Einstellungen enthalten den letzten Projektzugriff und die Designwahl `system`, `light` oder `dark`. `system` bleibt Standard und folgt laufenden Änderungen von `prefers-color-scheme`.
 
-Datenbankversion, Projektschema und App-Version sind eigenständige Konzepte. Spätere Schemaänderungen benötigen explizite Dexie-Migrationen und Migrationstests. Ein unbekanntes zukünftiges Schema darf nicht durch stilles Weglassen von Daten als Version 1 eingelesen werden. Vor riskanten Migrationen muss ein Sicherungs-/Wiederherstellungskonzept ergänzt werden; Version 0.1 implementiert keine Snapshot-Verwaltung.
+### Katalog
 
-## JSON-Projektsicherung
+Ein `Article` steht in dieser Stufe bereits für eine konkrete zählbare Variante: ID, Name, Kategorie, Hersteller, Serie, Farbe, Einheit `Stück`, Aktiv-/Favoritenstatus, Revision und Zeitstempel. Namen sind keine Materialidentität. Gleichnamige Artikel mit anderer Ausführung haben verschiedene IDs.
 
-Der Export umfasst Metadaten zum Dateiformat, Schema/App-Version und Erstellungszeitpunkt sowie genau ein Projekt. Einstellungen und weitere Projekte gehören nicht dazu. Der Import behandelt die Datei als nicht vertrauenswürdige Eingabe: JSON-Syntax, Struktur, Versionen, Pflichtfelder, Status, IDs und Zeitstempel werden vor dem Schreiben geprüft. Nicht unterstützte Felder oder Versionen werden abgelehnt, um Datenverlust durch unbemerkte Teilimporte zu vermeiden.
+Der öffentliche Startkatalog enthält 22 stabile IDs aus der gelieferten Liste. Passende Ausführungen sind Gira/System 55/Reinweiß glänzend; Herdanschlussdose und Tellerleuchte bleiben neutral. Es werden keine Artikelnummern oder Preise erfunden. Der Seed ergänzt transaktional nur fehlende IDs und überschreibt weder eigene Artikel noch Bearbeitungen, Favoriten oder Deaktivierungen.
 
-Die Speicherung erfolgt in einer IndexedDB-Transaktion. Ohne vorhandene ID wird die Projektidentität wiederhergestellt. Bei vorhandener ID wird eine neue ID erzeugt; die vorhandene Instanz wird niemals überschrieben. Eine gescheiterte Validierung oder Transaktion darf keine Teiländerung hinterlassen. Erweiterter Import mit Vorschau, Zusammenführen oder Ersetzen gehört nicht zu diesem Inkrement.
+Name und Kategorie können weiter gepflegt werden. Sobald Buchungen eine Variante referenzieren, dürfen Hersteller, Serie und Farbe nicht mehr verändert werden. Eine andere reale Ausführung wird als neuer Artikel angelegt. Deaktivieren löscht keine Daten: Es verhindert neue Erfassungen und Erhöhungen, lässt bestehende Summen aber sichtbar und nach unten korrigierbar.
 
-Seit Version 0.1.1 erhält jeder importierte Projektname „(Import)“ bzw. die nächste freie Nummer „(Import 2)“ usw. Die Namenswahl berücksichtigt aktive und archivierte Projekte, Groß-/Kleinschreibung und kanonisch gleiche Unicode-Schreibweisen. Namensprüfung und Einfügen laufen in derselben Schreibtransaktion, sodass parallele Imports unterscheidbare Namen erhalten. Vorhandene generierte Zusätze werden entfernt, bevor der neue Zusatz gewählt wird; lange Basisnamen werden Unicode-sicher auf das bestehende Namenslimit gekürzt. Status und Zeitstempel bleiben erhalten. Dafür sind weder eine Schemaänderung noch eine Datenmigration nötig; vorhandene Projekte bleiben unverändert.
+### Buchungen und Summen
 
-## Offline und Updates
+Jede tatsächliche Mengenänderung erzeugt eine `MeasurementEntry` mit stabiler ID, `projectId`, `articleId`, eingefrorenem `articleSnapshot`, ganzzahligem `delta`, Typ `add` oder `correction` und Zeitstempel. Ein unveränderter Gesamtwert erzeugt keine Nullbuchung.
 
-Der Service Worker hält ausschließlich die statische App-Shell und deren lokale Assets vor. Projekte bleiben in IndexedDB und werden nicht als Netzwerkantworten gecacht. Der erste erfolgreiche Onlineaufruf muss die App-Shell vollständig zwischenspeichern; eine Bereitschaftsanzeige hilft bei der Offline-Abnahme. Der Entwicklungsserver ist kein Nachweis für den Produktions-Service-Worker.
+Die erste Erfassung eines Artikels in einem Projekt friert seinen Namen, Kategorie, Einheit, Ausführungsmerkmale und Revision ein. Folgebuchungen derselben Projekt-/Artikelkombination verwenden denselben Stand. Katalogänderungen verwandeln somit keine bestehenden Aufmaße rückwirkend in andere Materialien oder Beschreibungen.
 
-Updates werden angekündigt und ausdrücklich ausgelöst. Ein Update darf kein unerwartetes Neuladen mit ungespeicherten Formulareingaben verursachen. Vor dem Bestätigen einer Aktualisierung offene Änderungen speichern oder verwerfen. Das Aktivieren des neuen Workers und der anschließende Reload ersetzen keine Datenmigration; Datenbankschemaänderungen bleiben gesondert zu behandeln.
+Die Materialliste summiert Deltas nach stabiler Artikel-ID, niemals nach Anzeigenamen. +1 und numerisches Hinzufügen erzeugen positive Deltas. Minus und „Gesamtmenge ändern“ berechnen eine zusätzliche Korrektur gegenüber der aktuellen Summe; ältere Buchungen bleiben unverändert. Summen müssen ganzzahlig zwischen 0 und 1.000.000 liegen. Verschiedene Ausführungen werden nicht zusammengefasst. Bei Menge null bleiben die Buchungen für Sicherung und Nachvollziehbarkeit vorhanden; CSV lässt Nullzeilen aus.
 
-Offlinefähigkeit gilt nach erfolgreicher Erstinstallation und solange der Browser den lokalen Speicher erhält. iOS kann Browser-/PWA-Speicher entfernen. Eine lokale Datenbank ist daher kein externes Backup. Regelmäßiger JSON-Export und ein testweiser Import sind erforderlich.
+Jede Mengenoperation prüft Projektstatus, Artikel und aktuelle Summe in derselben Schreibtransaktion wie das Einfügen der Buchung und die Aktualisierung des Projektzeitstempels. Archivierte Projekte erlauben keine Mengenänderung. Projektbenennung, Anzeige und Export bleiben wie bisher möglich.
 
-## GitHub Pages
+## Datenbankmigration
 
-Für dieses Repository lautet der Basis- und Scope-Pfad `/aufmassapp/`. `VITE_BASE_PATH` ermöglicht eine explizite Anpassung; Vite-Assets, Manifest und Service Worker müssen immer denselben Pfad verwenden. Für eine Root-Veröffentlichung ist `/` zu setzen. Hash-Navigation vermeidet serverseitige SPA-Fallback-Anforderungen auf Pages.
+Datenbankversion 1 enthält `projects` und `settings`. Version 2 ergänzt `articles` und `measurements` samt Indizes für Projekt-/Artikelbezüge. Bestehende Projekte und Einstellungen werden nicht umgeschrieben oder entfernt; insbesondere bleiben Designwahl und letzter Projektzugriff erhalten. Die Datenbank wird bei einem Fehler nicht gelöscht oder neu angelegt.
 
-Der Actions-Workflow installiert exakt aus dem Lockfile, führt Tests und Build aus und lädt `dist/` als Pages-Artefakt hoch. Deployment ist auf `main` begrenzt, Pull Requests werden nur validiert. `dist/` wird nicht versioniert. Repository-/Pages-Einstellungen und Geräteabnahme sind in der [README](README.md) dokumentiert.
+App-Version, Dexie-Datenbankversion, Projektmetadatenschema und JSON-Sicherungsschema sind getrennte Konzepte. Version 0.2 verwendet Datenbankversion 2 und Sicherungsschema 2, während Projektmetadaten weiterhin Schema 1 haben. Spätere Änderungen benötigen explizite Migrationen und Tests, statt alte Felder stillschweigend zu verwerfen.
 
-## Tests und Grenzen
+Vor einem Upgrade wird eine extern gespeicherte JSON-Sicherung empfohlen. Alte Dateien aus 0.1/0.1.1 sichern nur Projektmetadaten, weil dort keine Materialerfassung existierte. Die neue Projektdatei ersetzt kein vollständiges App-Backup, insbesondere für noch unbenutzte eigene Katalogartikel.
 
-Vitest mit `fake-indexeddb` prüft Projektlebenszyklus, Wiederöffnen einer Datenbank, letzte Projektauswahl, JSON-Roundtrip, ID-Kollisionen, fehlerhafte Formate und Designpersistenz. Playwright prüft den Produktions-Build einschließlich Pages-Unterpfad und Offline-Navigation. Beide ergänzen sich: eine IndexedDB-Nachbildung beweist kein iOS-Verhalten, und ein Browsertest ersetzt keinen Standalone-Kaltstart auf dem iPhone.
+## Versionierte Projekt-JSON-Datei
 
-Nicht überprüfte Gerätefunktionen sind ausdrücklich im manuellen Abnahmeplan festgehalten. Es wird keine universelle Aufbewahrungsgarantie für Browserdaten oder automatische Cloud-Sicherung zugesagt.
+Der Export verwendet `format: baustellenaufmass-project`, `schemaVersion: 2`, App-Version und Exportzeitpunkt sowie genau ein Projekt, seine `measurements` und ausschließlich referenzierte `articles`. Dazu zählen auch Artikel mit auf null korrigiertem Buchungsverlauf. Der übrige Katalog, andere Projekte und die Designwahl werden nicht exportiert.
+
+Vor dem Schreiben werden JSON-Syntax, Größe, exakte Struktur, unterstützte Versionen, IDs, Zeitstempel, Status, Artikel-/Buchungsfelder, Referenzen, eingefrorene Variantenstände und gültige nicht negative Gesamtsummen geprüft. Unbekannte Felder werden abgelehnt statt unbemerkt verworfen. Das bisherige Sicherungsschema 1 aus 0.1/0.1.1 wird weiterhin als Projekt ohne Materialdaten akzeptiert.
+
+Der Import übernimmt Projekt, erforderliche Artikel und Buchungen in einer IndexedDB-Transaktion. Eine Projekt-ID-Kollision erzeugt eine neue Projekt-ID; bestehende Projekte werden nie überschrieben. Eine vorhandene Artikel-ID wird nur bei gleichen Beschreibungs-/Ausführungsfeldern und mindestens gleich neuer lokaler Revision wiederverwendet; lokale Aktiv-/Favoritenzustände werden dabei nicht überschrieben. Bei einem Artikelkonflikt wird eine neue ID vergeben. Importierte Buchungen erhalten neue IDs. Alle betroffenen Verweise einschließlich Snapshot-IDs werden konsistent umgesetzt, ohne vorhandene Datensätze zu überschreiben. Fehler dürfen keine teilweise importierten Projekte, Artikel oder Buchungen hinterlassen.
+
+Die Namensregel aus 0.1.1 bleibt erhalten: „(Import)“, danach die nächste freie Nummer „(Import 2)“ usw. Aktive und archivierte Namen werden unter Berücksichtigung von Groß-/Kleinschreibung und kanonischem Unicode geprüft. Vorhandene generierte Zusätze werden nicht gestapelt; lange Basisnamen werden Unicode-sicher gekürzt. Namenswahl und Speicherung erfolgen atomar. Erweiterter Import mit Vorschau, Zusammenführen oder Ersetzen gehört nicht zu 0.2.
+
+## CSV-Materialliste
+
+CSV entsteht lokal aus den aggregierten eingefrorenen Projektständen, nicht aus nachträglich bearbeiteten Katalognamen. Spalten: Bezeichnung, Kategorie, Hersteller, Serie, Farbe, Einheit und Menge. Format ist UTF-8 mit BOM, Semikolon und CRLF. Textfelder sind doppelt maskiert; ein führendes Apostroph neutralisiert Formelanfänge `=`, `+`, `-` und `@`, auch nach führendem Leerraum. Nullsummen werden nicht ausgegeben. CSV ist eine Materialliste und kein Import-/Backupformat.
+
+## Offline, Updates und GitHub Pages
+
+Der bestehende Service Worker hält ausschließlich die statische App-Shell und lokale Assets vor. Projekte, Katalog und Buchungen liegen in IndexedDB, nicht im Netzwerkcache. Nach dem ersten vollständigen Onlineaufruf zeigt die App Offlinebereitschaft an. Updates werden angekündigt und ausdrücklich bestätigt; vor dem Reload müssen offene Formulare gespeichert oder verworfen werden.
+
+Basis- und Scope-Pfad bleiben `/aufmassapp/`. `VITE_BASE_PATH` erlaubt die Anpassung an eine Root-Veröffentlichung (`/`); Vite-Assets, Manifest und Worker müssen übereinstimmen. Hash-Navigation vermeidet serverseitige SPA-Rewrites. Der vorhandene Actions-Workflow, das Pages-Artefakt und die Berechtigungen bleiben erhalten; `dist/` wird nicht versioniert. Die [README](README.md) dokumentiert alle Pages-Einstellungen.
+
+Offlinefähigkeit setzt eine vollständige Erstinstallation und erhaltenen Browser-/PWA-Speicher voraus. iOS kann lokale Daten entfernen. JSON-Dateien deshalb extern speichern und testweise wiederherstellen. Ein Geräte-/Ursprungswechsel überträgt IndexedDB nicht automatisch.
+
+## Prüfung und noch erforderliche Abnahme
+
+Die automatisierten Prüfungen umfassen Projektlebenszyklus, Katalogpflege, wiederholbaren Seed, stabile Variantenidentität, Buchungen/Korrekturen, Mengenaggregation, CSV-Maskierung, Datenbankmigration und JSON-Roundtrips samt Konflikten und Fehlerfällen. Playwright prüft die Produktions-App unter dem Pages-Unterpfad und Offlineverhalten. Die tatsächlich ausgeführten Ergebnisse stehen im Änderungsbericht; diese Architektur behauptet keinen bereits bestandenen neuen Lauf.
+
+`fake-indexeddb` beweist kein iOS-Verhalten, und Chromium ersetzt keinen installierten iPhone-Kaltstart. Der manuelle Plan in der README ergänzt Upgrade von 0.1, Touch-/Tastaturbedienung, Dateiauswahl, CSV in der Ziel-App und JSON-Wiederherstellung auf frischer Installation. Eine universelle Aufbewahrungsgarantie oder automatische Cloud-Sicherung wird nicht zugesagt.

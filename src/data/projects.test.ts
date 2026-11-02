@@ -128,8 +128,14 @@ describe("Projektverwaltung in IndexedDB", () => {
 describe("Versionierter JSON-Projektimport und -export", () => {
   it("importiert weiterhin Sicherungen aus Version 0.1.0", async () => {
     const backup = await exportExample();
-    backup.appVersion = "0.1.0";
-    const imported = await repository.importProject(JSON.stringify(backup));
+    const legacy = {
+      format: backup.format,
+      schemaVersion: 1,
+      appVersion: "0.1.0",
+      exportedAt: backup.exportedAt,
+      project: backup.project,
+    };
+    const imported = await repository.importProject(JSON.stringify(legacy));
     expect(imported.name).toBe("Testbaustelle (Import)");
     expect(imported.status).toBe(backup.project.status);
   });
@@ -140,8 +146,8 @@ describe("Versionierter JSON-Projektimport und -export", () => {
     const json = await repository.exportProject(original.id);
     expect(JSON.parse(json)).toMatchObject({
       format: "baustellenaufmass-project",
-      schemaVersion: 1,
-      appVersion: "0.1.1",
+      schemaVersion: 2,
+      appVersion: "0.2.0",
       project: archived,
     });
     await db.delete();
@@ -230,7 +236,7 @@ describe("Versionierter JSON-Projektimport und -export", () => {
 
   const invalidChanges: [string, (backup: ProjectBackup) => unknown][] = [
     ["anderes Format", (b) => ({ ...b, format: "unbekannt" })],
-    ["zukünftiges Dateischema", (b) => ({ ...b, schemaVersion: 2 })],
+    ["zukünftiges Dateischema", (b) => ({ ...b, schemaVersion: 3 })],
     [
       "zukünftiges Projektschema",
       (b) => ({ ...b, project: { ...b.project, schemaVersion: 2 } }),
