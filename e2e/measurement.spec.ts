@@ -454,12 +454,8 @@ test("Aufmaß-CSV und Projekt-JSON exportieren eigene Artikel und stellen alle A
   await createArticle(page, name, "Reinweiß glänzend", 'Prüfung; "CSV"');
   await createProject(page, "Export-Aufmaß");
   await add(page, name, "2");
-  const csvDownload = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "Aufmaß-CSV exportieren", exact: true })
-    .click();
   const csvPath = testInfo.outputPath("material.csv");
-  await (await csvDownload).saveAs(csvPath);
+  await exportDownload(page, "Aufmaß-CSV exportieren", csvPath);
   const csv = await readFile(csvPath, "utf8");
   expect(csv.charCodeAt(0)).toBe(0xfeff);
   expect(csv).toContain(
@@ -478,19 +474,11 @@ test("Aufmaß-CSV und Projekt-JSON exportieren eigene Artikel und stellen alle A
       exact: true,
     })
     .click();
-  const csvAllDownload = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "CSV exportieren", exact: true })
-    .click();
   const csvAllPath = testInfo.outputPath("baustelle.csv");
-  await (await csvAllDownload).saveAs(csvAllPath);
+  await exportDownload(page, "CSV exportieren", csvAllPath);
   expect(await readFile(csvAllPath, "utf8")).toBe(csv);
-  const jsonDownload = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "JSON exportieren", exact: true })
-    .click();
   const jsonPath = testInfo.outputPath("projekt.json");
-  await (await jsonDownload).saveAs(jsonPath);
+  await exportDownload(page, "JSON exportieren", jsonPath);
   const backup = JSON.parse(await readFile(jsonPath, "utf8"));
   expect(backup.schemaVersion).toBe(3);
   expect(backup.namedMeasurements).toHaveLength(2);
@@ -537,3 +525,13 @@ test("Aufmaß-CSV und Projekt-JSON exportieren eigene Artikel und stellen alle A
     await fresh.close();
   }
 });
+
+async function exportDownload(page: Page, button: string, path: string) {
+  await test.step(button, async () => {
+    const downloadPromise = page.waitForEvent("download", {timeout: 10_000});
+    await page.getByRole("button", {name: button, exact: true}).click();
+    const download = await downloadPromise;
+    await download.saveAs(path);
+    expect(await download.failure()).toBeNull();
+  });
+}
