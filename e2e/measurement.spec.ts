@@ -123,13 +123,19 @@ test("Startkatalog enthält 22 Artikel einschließlich SAT und startet Projekte 
   ).toHaveCount(0);
 });
 
-test("Kategorienfilter bleibt mit langen Kategorien mobil bedienbar und innerhalb des Panels", async ({ page }) => {
+test("Kategorienfilter bleibt mit langen Kategorien mobil bedienbar und innerhalb des Panels", async ({
+  page,
+}) => {
   const category = "LangeKommunikationsKategorie".repeat(4).slice(0, 80);
   await createArticle(page, "Filterprüfartikel", "Reinweiß glänzend", category);
   await createProject(page, "Filterprüfung");
   const select = page.getByLabel("Artikelkategorie filtern", { exact: true });
   await select.selectOption(category);
-  await expect(page.getByRole("list", { name: "Aufmaßartikel", exact: true }).getByRole("button")).toHaveCount(1);
+  await expect(
+    page
+      .getByRole("list", { name: "Aufmaßartikel", exact: true })
+      .getByRole("button"),
+  ).toHaveCount(1);
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     for (const colorScheme of ["light", "dark"] as const) {
@@ -143,13 +149,18 @@ test("Kategorienfilter bleibt mit langen Kategorien mobil bedienbar und innerhal
           height: bounds.height,
           fontSize: parseFloat(style.fontSize),
           width: bounds.width,
-          available: panel.clientWidth - parseFloat(panelStyle.paddingLeft) - parseFloat(panelStyle.paddingRight),
+          available:
+            panel.clientWidth -
+            parseFloat(panelStyle.paddingLeft) -
+            parseFloat(panelStyle.paddingRight),
           overflow: document.documentElement.scrollWidth > window.innerWidth,
         };
       });
       expect(geometry.height).toBeGreaterThanOrEqual(48);
       expect(geometry.fontSize).toBeGreaterThanOrEqual(16);
-      expect(Math.abs(geometry.width - geometry.available)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.width - geometry.available)).toBeLessThanOrEqual(
+        1,
+      );
       expect(geometry.overflow).toBe(false);
     }
   }
@@ -560,8 +571,8 @@ test("Aufmaß-CSV und Projekt-JSON exportieren eigene Artikel und stellen alle A
 
 async function exportDownload(page: Page, button: string, path: string) {
   await test.step(button, async () => {
-    const downloadPromise = page.waitForEvent("download", {timeout: 10_000});
-    await page.getByRole("button", {name: button, exact: true}).click();
+    const downloadPromise = page.waitForEvent("download", { timeout: 10_000 });
+    await page.getByRole("button", { name: button, exact: true }).click();
     const download = await downloadPromise;
     await download.saveAs(path);
     expect(await download.failure()).toBeNull();

@@ -38,7 +38,11 @@ export class MeasurementRepository {
         if (id && (!previous || previous.projectId !== projectId))
           throw new Error("Aufmaß nicht gefunden.");
         const now = new Date(
-          Math.max(Date.now(), Date.parse(project.updatedAt), previous ? Date.parse(previous.updatedAt) : 0),
+          Math.max(
+            Date.now(),
+            Date.parse(project.updatedAt),
+            previous ? Date.parse(previous.updatedAt) : 0,
+          ),
         ).toISOString();
         const measurement = {
           id: id ?? crypto.randomUUID(),

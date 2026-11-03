@@ -9,6 +9,8 @@
 - JSON-Schema 3 sichert sämtliche Aufmaße (auch leere), Buchungen und referenzierte Artikel. Alte Schemata 1/2 bleiben lesbar; Import atomar inklusive aller Referenzumschreibungen.
 - Atomare Dexie-Migration 2 → 3: alte Projektbuchungen in „Bisheriges Aufmaß“, alle bisherigen Daten einschließlich Katalogpflege, Favoriten, Einstellungen und Importnamen bleiben erhalten.
 - Export-Schaltflächen mit flexiblem Abstand auch auf iPhone-Breite. Anforderungen, Datenmodell, Arbeitsregeln und neuer Auftrag 003 aktualisiert.
+- Copilot-Nachbesserungen: Migration prüft Katalog-/Snapshot-Konsistenz; Mengenänderungen und Umbenennen erhalten monotone Aufmaßzeitstempel und gültige Sicherungen auch bei vorausliegenden Importzeitstempeln.
+- Sicherungsprüfung gruppiert Buchungen statt wiederholter Historien-Scans; Kategorienfilter wieder mit voller Panelbreite, 48-Pixel-Touchhöhe und 16-Pixel-Schrift. Regressionen und Abschlussprüfungen im Prüfbericht dokumentiert.
 - Räume, Aufmaßvorlagen, Materialkombinationen und automatische Wippen bleiben ausdrücklich verschoben. Reale iPhone-Abnahme ist weiterhin offen.
 
 

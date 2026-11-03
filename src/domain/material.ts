@@ -212,10 +212,18 @@ export function articleSnapshot(article: Article): ArticleSnapshot {
 }
 
 /** Display names/categories may change; the recorded material identity must not. */
-export function matchesArticleSnapshot(article: Article, snapshot: ArticleSnapshot): boolean {
-  return snapshot.id === article.id && snapshot.revision <= article.revision &&
-    snapshot.unit === article.unit && snapshot.manufacturer === article.manufacturer &&
-    snapshot.series === article.series && snapshot.color === article.color;
+export function matchesArticleSnapshot(
+  article: Article,
+  snapshot: ArticleSnapshot,
+): boolean {
+  return (
+    snapshot.id === article.id &&
+    snapshot.revision <= article.revision &&
+    snapshot.unit === article.unit &&
+    snapshot.manufacturer === article.manufacturer &&
+    snapshot.series === article.series &&
+    snapshot.color === article.color
+  );
 }
 
 export function sameArticleSnapshot(

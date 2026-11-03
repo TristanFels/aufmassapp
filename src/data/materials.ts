@@ -227,7 +227,9 @@ export class MaterialRepository {
   }
 
   private timestamp(...previous: string[]): string {
-    return new Date(Math.max(Date.now(), ...previous.map((value) => Date.parse(value)))).toISOString();
+    return new Date(
+      Math.max(Date.now(), ...previous.map((value) => Date.parse(value))),
+    ).toISOString();
   }
 
   private async requireArticle(id: string): Promise<Article> {

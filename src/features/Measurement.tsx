@@ -64,7 +64,10 @@ export function Measurement({
     Number.isSafeInteger(amount) && amount > 0 && amount <= MAX_QUANTITY;
   const editAmount = totalValue === "" ? NaN : Number(totalValue);
   return (
-    <section className="individual-measurement" aria-label="Individuelles Aufmaß">
+    <section
+      className="individual-measurement"
+      aria-label="Individuelles Aufmaß"
+    >
       {archived && (
         <p className="notice">
           Dieses Projekt ist archiviert. Zum Bearbeiten bitte reaktivieren.

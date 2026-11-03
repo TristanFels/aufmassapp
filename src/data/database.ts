@@ -2,7 +2,12 @@ import Dexie, { type Table } from "dexie";
 import type { Project } from "../domain/project";
 import type { Article, MeasurementEntry } from "../domain/material";
 
-import { aggregateEntries, isArticle, isMeasurementEntry, matchesArticleSnapshot } from "../domain/material";
+import {
+  aggregateEntries,
+  isArticle,
+  isMeasurementEntry,
+  matchesArticleSnapshot,
+} from "../domain/material";
 import type { NamedMeasurement } from "../domain/measurement";
 
 export interface Setting {
@@ -52,8 +57,13 @@ export class AppDatabase extends Dexie {
           aggregateEntries(group);
           for (const entry of group) {
             const article = await tx.table("articles").get(entry.articleId);
-            if (!isArticle(article) || !matchesArticleSnapshot(article, entry.articleSnapshot))
-              throw new Error("Artikel fehlt oder widerspricht dem erfassten Stand; Migration abgebrochen.");
+            if (
+              !isArticle(article) ||
+              !matchesArticleSnapshot(article, entry.articleSnapshot)
+            )
+              throw new Error(
+                "Artikel fehlt oder widerspricht dem erfassten Stand; Migration abgebrochen.",
+              );
           }
           const id = crypto.randomUUID();
           await tx.table("namedMeasurements").add({

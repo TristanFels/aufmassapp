@@ -33,24 +33,22 @@ export interface LegacyProjectBackup {
   project: Project;
 }
 
-export interface ProjectBackupV2 extends Omit<
-  LegacyProjectBackup,
-  "schemaVersion"
-> {
+export interface ProjectBackupV2
+  extends Omit<LegacyProjectBackup, "schemaVersion"> {
   schemaVersion: 2;
   articles: Article[];
   measurements: MeasurementEntry[];
 }
 
-export interface ProjectBackupV3 extends Omit<
-  ProjectBackupV2,
-  "schemaVersion"
-> {
+export interface ProjectBackupV3
+  extends Omit<ProjectBackupV2, "schemaVersion"> {
   schemaVersion: 3;
   namedMeasurements: NamedMeasurement[];
 }
 export type ProjectBackup =
-  LegacyProjectBackup | ProjectBackupV2 | ProjectBackupV3;
+  | LegacyProjectBackup
+  | ProjectBackupV2
+  | ProjectBackupV3;
 
 export function validateProjectName(name: string): string {
   const trimmed = name.trim();
@@ -164,7 +162,8 @@ function consistentMaterials(
         return false;
       const groupedEntries = new Map<string, MeasurementEntry[]>();
       for (const entry of backup.measurements) {
-        if (!entry.measurementId || !sheets.has(entry.measurementId)) return false;
+        if (!entry.measurementId || !sheets.has(entry.measurementId))
+          return false;
         const group = groupedEntries.get(entry.measurementId);
         if (group) group.push(entry);
         else groupedEntries.set(entry.measurementId, [entry]);

@@ -43,13 +43,19 @@ async function setup() {
 async function importFutureMeasurement() {
   const { project, first, article } = await setup();
   await materials.addQuantity(first.id, article.id, 2);
-  const backup = JSON.parse(await projects.exportProject(project.id)) as ProjectBackupV3;
+  const backup = JSON.parse(
+    await projects.exportProject(project.id),
+  ) as ProjectBackupV3;
   const sheet = backup.namedMeasurements.find((item) => item.id === first.id)!;
   sheet.createdAt = "2099-01-01T00:00:00.000Z";
   sheet.updatedAt = "2099-01-02T00:00:00.000Z";
   const restored = await projects.importProject(JSON.stringify(backup));
-  const imported = (await sheets.list(restored.id)).find((item) => item.name === first.name)!;
-  await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf("string");
+  const imported = (await sheets.list(restored.id)).find(
+    (item) => item.name === first.name,
+  )!;
+  await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf(
+    "string",
+  );
   // A clock correction must not move a previously accepted timestamp backwards.
   vi.spyOn(Date, "now").mockReturnValue(Date.parse("2000-01-01T00:00:00.000Z"));
   return { restored, imported, article };
@@ -59,41 +65,73 @@ it.each(["Hinzufügen", "Gesamtkorrektur"])(
   "erhält Zeitstempel und Sicherbarkeit importierter Aufmaße beim %s",
   async (action) => {
     const { restored, imported, article } = await importFutureMeasurement();
-    if (action === "Hinzufügen") await materials.addQuantity(imported.id, article.id, 1);
+    if (action === "Hinzufügen")
+      await materials.addQuantity(imported.id, article.id, 1);
     else await materials.setTotal(imported.id, article.id, 1);
-    const updated = (await sheets.list(restored.id)).find((item) => item.id === imported.id)!;
+    const updated = (await sheets.list(restored.id)).find(
+      (item) => item.id === imported.id,
+    )!;
     expect(updated.updatedAt >= imported.updatedAt).toBe(true);
-    expect((await projects.getProject(restored.id))!.updatedAt).toBe(updated.updatedAt);
+    expect((await projects.getProject(restored.id))!.updatedAt).toBe(
+      updated.updatedAt,
+    );
     expect(await materials.getMeasurementTotals(imported.id)).toMatchObject([
       { quantity: action === "Hinzufügen" ? 3 : 1 },
     ]);
-    const entries = await db.measurements.where("measurementId").equals(imported.id).toArray();
-    expect(entries.some((entry) => entry.createdAt >= imported.updatedAt)).toBe(true);
-    await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf("string");
+    const entries = await db.measurements
+      .where("measurementId")
+      .equals(imported.id)
+      .toArray();
+    expect(entries.some((entry) => entry.createdAt >= imported.updatedAt)).toBe(
+      true,
+    );
+    await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf(
+      "string",
+    );
   },
 );
 
 it("erhält Zeitstempel und Sicherbarkeit beim Umbenennen importierter Aufmaße", async () => {
   const { restored, imported } = await importFutureMeasurement();
-  const saved = await sheets.save(restored.id, "Umbenannt", "Neue Kategorie", imported.id);
+  const saved = await sheets.save(
+    restored.id,
+    "Umbenannt",
+    "Neue Kategorie",
+    imported.id,
+  );
   expect(saved.updatedAt >= imported.updatedAt).toBe(true);
   expect(saved.createdAt).toBe(imported.createdAt);
-  expect(saved).toMatchObject({ name: "Umbenannt", category: "Neue Kategorie" });
-  expect((await projects.getProject(restored.id))!.updatedAt).toBe(saved.updatedAt);
-  await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf("string");
+  expect(saved).toMatchObject({
+    name: "Umbenannt",
+    category: "Neue Kategorie",
+  });
+  expect((await projects.getProject(restored.id))!.updatedAt).toBe(
+    saved.updatedAt,
+  );
+  await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf(
+    "string",
+  );
 });
 
 it("prüft große Historien mit vielen leeren Aufmaßen und erkennt negative Einzelsummen weiterhin", async () => {
   const { project, first, second, article } = await setup();
   await materials.addQuantity(first.id, article.id, 1);
-  const backup = JSON.parse(await projects.exportProject(project.id)) as ProjectBackupV3;
+  const backup = JSON.parse(
+    await projects.exportProject(project.id),
+  ) as ProjectBackupV3;
   const template = backup.namedMeasurements[0];
-  backup.namedMeasurements.push(...Array.from({ length: 2000 }, (_, index) => ({
-    ...template, id: crypto.randomUUID(), name: `Leeres Aufmaß ${index + 1}`,
-  })));
+  backup.namedMeasurements.push(
+    ...Array.from({ length: 2000 }, (_, index) => ({
+      ...template,
+      id: crypto.randomUUID(),
+      name: `Leeres Aufmaß ${index + 1}`,
+    })),
+  );
   const entry = backup.measurements[0];
   backup.measurements = Array.from({ length: 1000 }, (_, index) => ({
-    ...entry, id: crypto.randomUUID(), measurementId: index === 999 ? second.id : first.id,
+    ...entry,
+    id: crypto.randomUUID(),
+    measurementId: index === 999 ? second.id : first.id,
   }));
   const parsed = parseProjectBackup(JSON.stringify(backup));
   expect(parsed.schemaVersion).toBe(3);
@@ -103,7 +141,9 @@ it("prüft große Historien mit vielen leeren Aufmaßen und erkennt negative Ein
   const invalid = structuredClone(backup);
   invalid.measurements[999].delta = -1;
   invalid.measurements[999].kind = "correction";
-  expect(() => parseProjectBackup(JSON.stringify(invalid))).toThrow("Projektformat");
+  expect(() => parseProjectBackup(JSON.stringify(invalid))).toThrow(
+    "Projektformat",
+  );
 });
 
 it("trennt Aufmaße und Varianten, korrigiert lokal und summiert jede Buchung genau einmal", async () => {
@@ -292,14 +332,12 @@ async function legacy(corrupt = false) {
   const name = `v2-${crypto.randomUUID()}`;
   const old = new Dexie(name);
   extra.push(old);
-  old
-    .version(2)
-    .stores({
-      projects: "id,status,updatedAt",
-      settings: "key",
-      articles: "id,active,category",
-      measurements: "id,projectId,[projectId+articleId],articleId",
-    });
+  old.version(2).stores({
+    projects: "id,status,updatedAt",
+    settings: "key",
+    articles: "id,active,category",
+    measurements: "id,projectId,[projectId+articleId],articleId",
+  });
   const time = "2026-11-01T00:00:00.000Z";
   const project = {
     id: crypto.randomUUID(),
@@ -333,13 +371,11 @@ async function legacy(corrupt = false) {
   await old.table("measurements").bulkAdd(entries);
   if (corrupt) {
     // A second invalid project ensures the first one's writes must roll back, too.
-    await old
-      .table("measurements")
-      .add({
-        ...entries[0],
-        id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
-        projectId: crypto.randomUUID(),
-      });
+    await old.table("measurements").add({
+      ...entries[0],
+      id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      projectId: crypto.randomUUID(),
+    });
   }
   const settings = [
     { key: "theme", value: "dark" },
@@ -408,20 +444,27 @@ it("rollt fehlerhafte Migration inklusive Schema und vorheriger Projektzuordnung
 it.each(["manufacturer", "series", "color", "revision", "unit"] as const)(
   "bricht die Migration bei widersprüchlichem Katalogfeld %s ohne Datenänderung ab",
   async (field) => {
-    const { upgraded, old, article, entries, project, settings } = await legacy();
+    const { upgraded, old, article, entries, project, settings } =
+      await legacy();
     await old.open();
     const invalidArticle = {
       ...article,
-      [field]: field === "revision" ? 1 : field === "unit" ? "Meter" : "Abweichend",
+      [field]:
+        field === "revision" ? 1 : field === "unit" ? "Meter" : "Abweichend",
     };
     await old.table("articles").put(invalidArticle);
     old.close();
-    const rejected = await upgraded.open().then(() => false, () => true);
+    const rejected = await upgraded.open().then(
+      () => false,
+      () => true,
+    );
     upgraded.close();
     expect(rejected).toBe(true);
     await old.open();
     expect(old.verno).toBe(2);
-    expect(old.tables.map((table) => table.name)).not.toContain("namedMeasurements");
+    expect(old.tables.map((table) => table.name)).not.toContain(
+      "namedMeasurements",
+    );
     expect(await old.table("articles").get(article.id)).toEqual(invalidArticle);
     expect(await old.table("measurements").toArray()).toEqual(entries);
     expect(await old.table("projects").get(project.id)).toEqual(project);
@@ -435,9 +478,18 @@ it.each(["manufacturer", "series", "color", "revision", "unit"] as const)(
 it("erlaubt historische Namen und Kategorien bei der konsistenten Migration", async () => {
   const { upgraded, old, article, project } = await legacy();
   await old.open();
-  await old.table("articles").put({ ...article, name: "Neuer Katalogname", category: "Neue Kategorie", revision: 3 });
+  await old
+    .table("articles")
+    .put({
+      ...article,
+      name: "Neuer Katalogname",
+      category: "Neue Kategorie",
+      revision: 3,
+    });
   old.close();
   await upgraded.open();
   const text = await new ProjectRepository(upgraded).exportProject(project.id);
-  expect(JSON.parse(text).measurements[0].articleSnapshot.name).toBe(input.name);
+  expect(JSON.parse(text).measurements[0].articleSnapshot.name).toBe(
+    input.name,
+  );
 });
