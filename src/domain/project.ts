@@ -159,18 +159,17 @@ function consistentMaterials(
         sheets.size !== backup.namedMeasurements.length ||
         backup.namedMeasurements.some(
           (sheet) => sheet.projectId !== backup.project.id,
-        ) ||
-        backup.measurements.some(
-          (entry) => !entry.measurementId || !sheets.has(entry.measurementId),
         )
       )
         return false;
-      for (const sheet of sheets.values())
-        aggregateEntries(
-          backup.measurements.filter(
-            (entry) => entry.measurementId === sheet.id,
-          ),
-        );
+      const groupedEntries = new Map<string, MeasurementEntry[]>();
+      for (const entry of backup.measurements) {
+        if (!entry.measurementId || !sheets.has(entry.measurementId)) return false;
+        const group = groupedEntries.get(entry.measurementId);
+        if (group) group.push(entry);
+        else groupedEntries.set(entry.measurementId, [entry]);
+      }
+      for (const group of groupedEntries.values()) aggregateEntries(group);
     }
   } catch {
     return false;

@@ -6,7 +6,7 @@ import { ProjectRepository } from "./projects";
 import { MaterialRepository } from "./materials";
 import { MeasurementRepository } from "./named-measurements";
 import { articleSnapshot, MAX_QUANTITY } from "../domain/material";
-import type { ProjectBackupV3 } from "../domain/project";
+import { parseProjectBackup, type ProjectBackupV3 } from "../domain/project";
 
 let db: AppDatabase;
 let projects: ProjectRepository;
@@ -81,6 +81,29 @@ it("erhält Zeitstempel und Sicherbarkeit beim Umbenennen importierter Aufmaße"
   expect(saved).toMatchObject({ name: "Umbenannt", category: "Neue Kategorie" });
   expect((await projects.getProject(restored.id))!.updatedAt).toBe(saved.updatedAt);
   await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf("string");
+});
+
+it("prüft große Historien mit vielen leeren Aufmaßen und erkennt negative Einzelsummen weiterhin", async () => {
+  const { project, first, second, article } = await setup();
+  await materials.addQuantity(first.id, article.id, 1);
+  const backup = JSON.parse(await projects.exportProject(project.id)) as ProjectBackupV3;
+  const template = backup.namedMeasurements[0];
+  backup.namedMeasurements.push(...Array.from({ length: 2000 }, (_, index) => ({
+    ...template, id: crypto.randomUUID(), name: `Leeres Aufmaß ${index + 1}`,
+  })));
+  const entry = backup.measurements[0];
+  backup.measurements = Array.from({ length: 1000 }, (_, index) => ({
+    ...entry, id: crypto.randomUUID(), measurementId: index === 999 ? second.id : first.id,
+  }));
+  const parsed = parseProjectBackup(JSON.stringify(backup));
+  expect(parsed.schemaVersion).toBe(3);
+  if (parsed.schemaVersion !== 3) throw new Error("Falsches Sicherungsschema");
+  expect(parsed.namedMeasurements).toHaveLength(2002);
+  expect(parsed.measurements).toHaveLength(1000);
+  const invalid = structuredClone(backup);
+  invalid.measurements[999].delta = -1;
+  invalid.measurements[999].kind = "correction";
+  expect(() => parseProjectBackup(JSON.stringify(invalid))).toThrow("Projektformat");
 });
 
 it("trennt Aufmaße und Varianten, korrigiert lokal und summiert jede Buchung genau einmal", async () => {
