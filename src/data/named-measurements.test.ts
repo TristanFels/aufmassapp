@@ -73,6 +73,16 @@ it.each(["Hinzufügen", "Gesamtkorrektur"])(
   },
 );
 
+it("erhält Zeitstempel und Sicherbarkeit beim Umbenennen importierter Aufmaße", async () => {
+  const { restored, imported } = await importFutureMeasurement();
+  const saved = await sheets.save(restored.id, "Umbenannt", "Neue Kategorie", imported.id);
+  expect(saved.updatedAt >= imported.updatedAt).toBe(true);
+  expect(saved.createdAt).toBe(imported.createdAt);
+  expect(saved).toMatchObject({ name: "Umbenannt", category: "Neue Kategorie" });
+  expect((await projects.getProject(restored.id))!.updatedAt).toBe(saved.updatedAt);
+  await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf("string");
+});
+
 it("trennt Aufmaße und Varianten, korrigiert lokal und summiert jede Buchung genau einmal", async () => {
   const { project, first, second, article } = await setup();
   const other = await materials.createArticle({ ...input, color: "Schwarz" });
