@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import Dexie from "dexie";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createDatabase, type AppDatabase } from "./database";
 import { ProjectRepository } from "./projects";
 import { MaterialRepository } from "./materials";
@@ -27,6 +27,7 @@ beforeEach(() => {
   sheets = new MeasurementRepository(db);
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   await db.delete();
   for (const d of extra.splice(0)) await d.delete();
 });
@@ -38,6 +39,39 @@ async function setup() {
   const article = await materials.createArticle(input);
   return { project, first, second, article };
 }
+
+async function importFutureMeasurement() {
+  const { project, first, article } = await setup();
+  await materials.addQuantity(first.id, article.id, 2);
+  const backup = JSON.parse(await projects.exportProject(project.id)) as ProjectBackupV3;
+  const sheet = backup.namedMeasurements.find((item) => item.id === first.id)!;
+  sheet.createdAt = "2099-01-01T00:00:00.000Z";
+  sheet.updatedAt = "2099-01-02T00:00:00.000Z";
+  const restored = await projects.importProject(JSON.stringify(backup));
+  const imported = (await sheets.list(restored.id)).find((item) => item.name === first.name)!;
+  await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf("string");
+  // A clock correction must not move a previously accepted timestamp backwards.
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2000-01-01T00:00:00.000Z"));
+  return { restored, imported, article };
+}
+
+it.each(["Hinzufügen", "Gesamtkorrektur"])(
+  "erhält Zeitstempel und Sicherbarkeit importierter Aufmaße beim %s",
+  async (action) => {
+    const { restored, imported, article } = await importFutureMeasurement();
+    if (action === "Hinzufügen") await materials.addQuantity(imported.id, article.id, 1);
+    else await materials.setTotal(imported.id, article.id, 1);
+    const updated = (await sheets.list(restored.id)).find((item) => item.id === imported.id)!;
+    expect(updated.updatedAt >= imported.updatedAt).toBe(true);
+    expect((await projects.getProject(restored.id))!.updatedAt).toBe(updated.updatedAt);
+    expect(await materials.getMeasurementTotals(imported.id)).toMatchObject([
+      { quantity: action === "Hinzufügen" ? 3 : 1 },
+    ]);
+    const entries = await db.measurements.where("measurementId").equals(imported.id).toArray();
+    expect(entries.some((entry) => entry.createdAt >= imported.updatedAt)).toBe(true);
+    await expect(projects.exportProject(restored.id)).resolves.toBeTypeOf("string");
+  },
+);
 
 it("trennt Aufmaße und Varianten, korrigiert lokal und summiert jede Buchung genau einmal", async () => {
   const { project, first, second, article } = await setup();

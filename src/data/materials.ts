@@ -214,7 +214,7 @@ export class MaterialRepository {
             )?.articleSnapshot ?? articleSnapshot(article),
           delta,
           kind,
-          createdAt: this.timestamp(project.updatedAt),
+          createdAt: this.timestamp(project.updatedAt, measurement.updatedAt),
         };
         await this.db.measurements.add(entry);
         await this.db.namedMeasurements.put({
@@ -226,8 +226,8 @@ export class MaterialRepository {
     );
   }
 
-  private timestamp(previous: string): string {
-    return new Date(Math.max(Date.now(), Date.parse(previous))).toISOString();
+  private timestamp(...previous: string[]): string {
+    return new Date(Math.max(Date.now(), ...previous.map((value) => Date.parse(value)))).toISOString();
   }
 
   private async requireArticle(id: string): Promise<Article> {
