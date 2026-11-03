@@ -123,6 +123,38 @@ test("Startkatalog enthält 22 Artikel einschließlich SAT und startet Projekte 
   ).toHaveCount(0);
 });
 
+test("Kategorienfilter bleibt mit langen Kategorien mobil bedienbar und innerhalb des Panels", async ({ page }) => {
+  const category = "LangeKommunikationsKategorie".repeat(4).slice(0, 80);
+  await createArticle(page, "Filterprüfartikel", "Reinweiß glänzend", category);
+  await createProject(page, "Filterprüfung");
+  const select = page.getByLabel("Artikelkategorie filtern", { exact: true });
+  await select.selectOption(category);
+  await expect(page.getByRole("list", { name: "Aufmaßartikel", exact: true }).getByRole("button")).toHaveCount(1);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      const geometry = await select.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const panel = element.closest(".panel")!;
+        const style = getComputedStyle(element);
+        const panelStyle = getComputedStyle(panel);
+        return {
+          height: bounds.height,
+          fontSize: parseFloat(style.fontSize),
+          width: bounds.width,
+          available: panel.clientWidth - parseFloat(panelStyle.paddingLeft) - parseFloat(panelStyle.paddingRight),
+          overflow: document.documentElement.scrollWidth > window.innerWidth,
+        };
+      });
+      expect(geometry.height).toBeGreaterThanOrEqual(48);
+      expect(geometry.fontSize).toBeGreaterThanOrEqual(16);
+      expect(Math.abs(geometry.width - geometry.available)).toBeLessThanOrEqual(1);
+      expect(geometry.overflow).toBe(false);
+    }
+  }
+});
+
 test("Bestehende Version-0.1-Projekte, Design und Schnellzugriff bleiben beim Datenbank-Upgrade erhalten", async ({
   page,
 }) => {
