@@ -337,3 +337,40 @@ it("rollt fehlerhafte Migration inklusive Schema und vorheriger Projektzuordnung
   );
   old.close();
 });
+
+it.each(["manufacturer", "series", "color", "revision", "unit"] as const)(
+  "bricht die Migration bei widersprüchlichem Katalogfeld %s ohne Datenänderung ab",
+  async (field) => {
+    const { upgraded, old, article, entries, project, settings } = await legacy();
+    await old.open();
+    const invalidArticle = {
+      ...article,
+      [field]: field === "revision" ? 1 : field === "unit" ? "Meter" : "Abweichend",
+    };
+    await old.table("articles").put(invalidArticle);
+    old.close();
+    const rejected = await upgraded.open().then(() => false, () => true);
+    upgraded.close();
+    expect(rejected).toBe(true);
+    await old.open();
+    expect(old.verno).toBe(2);
+    expect(old.tables.map((table) => table.name)).not.toContain("namedMeasurements");
+    expect(await old.table("articles").get(article.id)).toEqual(invalidArticle);
+    expect(await old.table("measurements").toArray()).toEqual(entries);
+    expect(await old.table("projects").get(project.id)).toEqual(project);
+    expect(await old.table("settings").toArray()).toEqual(
+      [...settings].sort((a, b) => a.key.localeCompare(b.key)),
+    );
+    old.close();
+  },
+);
+
+it("erlaubt historische Namen und Kategorien bei der konsistenten Migration", async () => {
+  const { upgraded, old, article, project } = await legacy();
+  await old.open();
+  await old.table("articles").put({ ...article, name: "Neuer Katalogname", category: "Neue Kategorie", revision: 3 });
+  old.close();
+  await upgraded.open();
+  const text = await new ProjectRepository(upgraded).exportProject(project.id);
+  expect(JSON.parse(text).measurements[0].articleSnapshot.name).toBe(input.name);
+});

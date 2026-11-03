@@ -3,6 +3,7 @@ import {
   isArticle,
   isMeasurementEntry,
   aggregateEntries,
+  matchesArticleSnapshot,
   type Article,
   type MeasurementEntry,
 } from "./material";
@@ -139,10 +140,7 @@ function consistentMaterials(
     if (
       !article ||
       entry.projectId !== backup.project.id ||
-      entry.articleSnapshot.revision > article.revision ||
-      entry.articleSnapshot.manufacturer !== article.manufacturer ||
-      entry.articleSnapshot.series !== article.series ||
-      entry.articleSnapshot.color !== article.color
+      !matchesArticleSnapshot(article, entry.articleSnapshot)
     )
       return false;
     referenced.add(entry.articleId);
