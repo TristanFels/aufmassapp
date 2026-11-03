@@ -9,7 +9,7 @@ import {
 import { liveQuery, type Subscription } from "dexie";
 import { projects, materials } from "./services";
 import { Catalog } from "../features/Catalog";
-import { Measurement } from "../features/Measurement";
+import { Measurements, measurementUrl } from "../features/Measurements";
 import { useTheme } from "./useTheme";
 import {
   APP_VERSION,
@@ -23,11 +23,24 @@ import { OfflineStatus } from "../platform/OfflineStatus";
 type Snapshot = { list: Project[]; recent?: Project; theme: Theme };
 type Route =
   | { page: "projects"; id?: string }
-  | { page: "articles" | "settings" };
+  | { page: "articles" | "settings" }
+  | { page: "measurements"; projectId?: string; id?: string };
 const projectUrl = (id: string) => `#/projects/${encodeURIComponent(id)}`;
 
 function readRoute(): Route {
   const hash = window.location.hash;
+  if (hash === "#/measurements" || hash.startsWith("#/measurements/")) {
+    try {
+      const [, , projectId, id] = hash.split("/");
+      return {
+        page: "measurements",
+        projectId: projectId ? decodeURIComponent(projectId) : undefined,
+        id: id ? decodeURIComponent(id) : undefined,
+      };
+    } catch {
+      return { page: "measurements" };
+    }
+  }
   if (hash === "#/settings") return { page: "settings" };
   if (hash === "#/articles") return { page: "articles" };
   if (hash.startsWith("#/projects/")) {
@@ -43,10 +56,12 @@ function readRoute(): Route {
 function Icon({
   name,
 }: {
-  name: "projects" | "articles" | "settings" | "arrow" | "plus";
+  name:
+    "projects" | "measurements" | "articles" | "settings" | "arrow" | "plus";
 }) {
   const paths = {
     projects: "M3 7h7l2 2h9v11H3V7Zm0 0V4h7l2 3",
+    measurements: "M4 3h16v18H4zM8 7h8M8 12h8M8 17h5",
     articles: "m12 3 9 5-9 5-9-5 9-5Zm-9 5v9l9 5 9-5V8M12 13v9",
     settings: "M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M9 15v6",
     arrow: "M5 12h14m-6-6 6 6-6 6",
@@ -147,7 +162,12 @@ export function App() {
     return () => window.removeEventListener("hashchange", listener);
   }, []);
 
-  const currentId = route.page === "projects" ? route.id : undefined;
+  const currentId =
+    route.page === "projects"
+      ? route.id
+      : route.page === "measurements"
+        ? route.projectId
+        : undefined;
   const current = snapshot?.list.find((project) => project.id === currentId);
   useEffect(() => {
     if (currentId && current)
@@ -321,6 +341,15 @@ export function App() {
                   </section>
                 </>
               ))}
+            {route.page === "measurements" && (
+              <Measurements
+                projects={snapshot.list}
+                projectId={route.projectId}
+                id={route.id}
+                busy={busy}
+                perform={perform}
+              />
+            )}
             {route.page === "articles" && (
               <>
                 <div className="page-heading">
@@ -399,22 +428,26 @@ export function App() {
         </footer>
       </main>
       <nav className="bottom-nav" aria-label="Hauptnavigation">
-        {(["projects", "articles", "settings"] as const).map((page) => (
-          <a
-            href={`#/${page}`}
-            key={page}
-            aria-current={route.page === page ? "page" : undefined}
-          >
-            <Icon name={page} />
-            <span>
-              {page === "projects"
-                ? "Projekte"
-                : page === "articles"
-                  ? "Artikel"
-                  : "Einstellungen"}
-            </span>
-          </a>
-        ))}
+        {(["projects", "measurements", "articles", "settings"] as const).map(
+          (page) => (
+            <a
+              href={`#/${page}`}
+              key={page}
+              aria-current={route.page === page ? "page" : undefined}
+            >
+              <Icon name={page} />
+              <span>
+                {page === "projects"
+                  ? "Projekt"
+                  : page === "measurements"
+                    ? "Aufmaß"
+                    : page === "articles"
+                      ? "Artikel"
+                      : "Einstellungen"}
+              </span>
+            </a>
+          ),
+        )}
       </nav>
     </div>
   );
@@ -564,12 +597,12 @@ function ProjectDetail({
         <h1>{project.name}</h1>
         <p>Lokal gespeichert · Änderungen bleiben auf diesem Gerät.</p>
       </div>
-      <Measurement
-        projectId={project.id}
-        archived={project.status === "archived"}
-        busy={busy}
-        perform={perform}
-      />
+      <section className="panel">
+        <h2>Aufmaß</h2>
+        <a className="file-button" href={measurementUrl(project.id)}>
+          Aufmaß erfassen
+        </a>
+      </section>
       <section className="panel">
         <h2>Projekt bearbeiten</h2>
         <form
@@ -609,16 +642,21 @@ function ProjectDetail({
           Artikeln zum Wiederherstellen. CSV enthält die Materialliste zum
           Weitergeben.
         </p>
-        <button disabled={busy} onClick={() => void perform(download)}>
-          JSON exportieren
-        </button>
-        <button
-          className="secondary"
-          disabled={busy}
-          onClick={() => void perform(() => download("csv"))}
-        >
-          CSV exportieren
-        </button>
+        <div className="actions">
+          <button
+            disabled={busy}
+            onClick={() => void perform(() => download())}
+          >
+            JSON exportieren
+          </button>
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={() => void perform(() => download("csv"))}
+          >
+            CSV exportieren
+          </button>
+        </div>
       </section>
       <section className="panel">
         <h2>

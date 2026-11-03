@@ -108,26 +108,36 @@ export class MaterialRepository {
   async getTotals(projectId: string): Promise<MaterialTotal[]> {
     return aggregateEntries(
       await this.db.measurements.where("projectId").equals(projectId).toArray(),
+      Number.MAX_SAFE_INTEGER,
+    );
+  }
+
+  async getMeasurementTotals(measurementId: string): Promise<MaterialTotal[]> {
+    return aggregateEntries(
+      await this.db.measurements
+        .where("measurementId")
+        .equals(measurementId)
+        .toArray(),
     );
   }
 
   async addQuantity(
-    projectId: string,
+    measurementId: string,
     articleId: string,
     quantity: number,
   ): Promise<void> {
     validateQuantity(quantity, true);
     await this.changeQuantity(
-      projectId,
+      measurementId,
       articleId,
       (current) => current + quantity,
       "add",
     );
   }
 
-  async decrement(projectId: string, articleId: string): Promise<void> {
+  async decrement(measurementId: string, articleId: string): Promise<void> {
     await this.changeQuantity(
-      projectId,
+      measurementId,
       articleId,
       (current) => current - 1,
       "correction",
@@ -135,13 +145,13 @@ export class MaterialRepository {
   }
 
   async setTotal(
-    projectId: string,
+    measurementId: string,
     articleId: string,
     quantity: number,
   ): Promise<void> {
     validateQuantity(quantity);
     await this.changeQuantity(
-      projectId,
+      measurementId,
       articleId,
       () => quantity,
       "correction",
@@ -149,7 +159,7 @@ export class MaterialRepository {
   }
 
   private async changeQuantity(
-    projectId: string,
+    measurementId: string,
     articleId: string,
     calculate: (current: number) => number,
     kind: MeasurementEntry["kind"],
@@ -157,9 +167,14 @@ export class MaterialRepository {
     await this.db.transaction(
       "rw",
       this.db.projects,
+      this.db.namedMeasurements,
       this.db.articles,
       this.db.measurements,
       async () => {
+        const measurement = await this.db.namedMeasurements.get(measurementId);
+        if (!measurement)
+          throw new Error("Das Aufmaß / Projekt wurde nicht gefunden.");
+        const projectId = measurement.projectId;
         const project = await this.db.projects.get(projectId);
         if (!project) throw new Error("Das Projekt wurde nicht gefunden.");
         if (project.status !== "active")
@@ -168,8 +183,8 @@ export class MaterialRepository {
           );
         const article = await this.requireArticle(articleId);
         const entries = await this.db.measurements
-          .where("[projectId+articleId]")
-          .equals([projectId, articleId])
+          .where("[measurementId+articleId]")
+          .equals([measurementId, articleId])
           .toArray();
         const previous = aggregateEntries(entries)[0];
         const current = previous?.quantity ?? 0;
@@ -187,21 +202,34 @@ export class MaterialRepository {
         if (!delta) return;
         const entry: MeasurementEntry = {
           id: crypto.randomUUID(),
+          measurementId,
           projectId,
           articleId,
-          articleSnapshot: previous?.snapshot ?? articleSnapshot(article),
+          articleSnapshot:
+            (
+              await this.db.measurements
+                .where("[projectId+articleId]")
+                .equals([projectId, articleId])
+                .first()
+            )?.articleSnapshot ?? articleSnapshot(article),
           delta,
           kind,
-          createdAt: this.timestamp(project.updatedAt),
+          createdAt: this.timestamp(project.updatedAt, measurement.updatedAt),
         };
         await this.db.measurements.add(entry);
+        await this.db.namedMeasurements.put({
+          ...measurement,
+          updatedAt: entry.createdAt,
+        });
         await this.db.projects.put({ ...project, updatedAt: entry.createdAt });
       },
     );
   }
 
-  private timestamp(previous: string): string {
-    return new Date(Math.max(Date.now(), Date.parse(previous))).toISOString();
+  private timestamp(...previous: string[]): string {
+    return new Date(
+      Math.max(Date.now(), ...previous.map((value) => Date.parse(value))),
+    ).toISOString();
   }
 
   private async requireArticle(id: string): Promise<Article> {

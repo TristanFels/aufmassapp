@@ -8,7 +8,7 @@ export interface MaterialData {
   totals: MaterialTotal[];
 }
 
-export function useMaterialData(projectId?: string) {
+export function useMaterialData(projectId?: string, measurementId?: string) {
   const [data, setData] = useState<MaterialData>();
   const [error, setError] = useState("");
   useEffect(() => {
@@ -17,7 +17,11 @@ export function useMaterialData(projectId?: string) {
     const subscription = liveQuery(async () => {
       const [articles, totals] = await Promise.all([
         materials.listArticles(),
-        projectId ? materials.getTotals(projectId) : Promise.resolve([]),
+        measurementId
+          ? materials.getMeasurementTotals(measurementId)
+          : projectId
+            ? materials.getTotals(projectId)
+            : Promise.resolve([]),
       ]);
       return { articles, totals };
     }).subscribe({
@@ -28,6 +32,6 @@ export function useMaterialData(projectId?: string) {
         ),
     });
     return () => subscription.unsubscribe();
-  }, [projectId]);
+  }, [projectId, measurementId]);
   return { data, error };
 }

@@ -1,3 +1,4 @@
+import { MeasurementRepository } from "./named-measurements";
 import "fake-indexeddb/auto";
 import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -164,10 +165,10 @@ describe("Katalog und wiederholbare Startdaten", () => {
 describe("Buchungen und Mengensummen", () => {
   it("addiert einzelne Buchungen, speichert eine Korrekturbuchung und erhält den Stand nach Neustart", async () => {
     const { project, article } = await setup();
-    await materials.addQuantity(project.id, article.id, 1);
-    await materials.addQuantity(project.id, article.id, 4);
-    await materials.setTotal(project.id, article.id, 3);
-    await materials.decrement(project.id, article.id);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 1);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 4);
+    await materials.setTotal((await sheet(project.id)).id, article.id, 3);
+    await materials.decrement((await sheet(project.id)).id, article.id);
     await reopen();
     expect(await materials.getTotals(project.id)).toEqual([
       {
@@ -195,15 +196,15 @@ describe("Buchungen und Mengensummen", () => {
 
   it("setzt die Gesamtsumme statt sie zur bestehenden Summe zu addieren und speichert positive Korrekturen", async () => {
     const { project, article } = await setup();
-    await materials.addQuantity(project.id, article.id, 2);
-    await materials.setTotal(project.id, article.id, 8);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 2);
+    await materials.setTotal((await sheet(project.id)).id, article.id, 8);
     expect((await materials.getTotals(project.id))[0].quantity).toBe(8);
     expect(
       (await db.measurements.toArray()).find((e) => e.kind === "correction"),
     ).toMatchObject({ delta: 6 });
-    await materials.setTotal(project.id, article.id, 8);
+    await materials.setTotal((await sheet(project.id)).id, article.id, 8);
     expect(await db.measurements.count()).toBe(2);
-    await materials.setTotal(project.id, article.id, 0);
+    await materials.setTotal((await sheet(project.id)).id, article.id, 0);
     expect((await materials.getTotals(project.id))[0].quantity).toBe(0);
   });
 
@@ -214,9 +215,13 @@ describe("Buchungen und Mengensummen", () => {
       color: "Andere Farbe",
     });
     const secondProject = await projects.createProject("Zweite Testbaustelle");
-    await materials.addQuantity(project.id, article.id, 2);
-    await materials.addQuantity(project.id, other.id, 7);
-    await materials.addQuantity(secondProject.id, article.id, 4);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 2);
+    await materials.addQuantity((await sheet(project.id)).id, other.id, 7);
+    await materials.addQuantity(
+      (await sheet(secondProject.id)).id,
+      article.id,
+      4,
+    );
     expect(
       (await materials.getTotals(project.id)).map((t) => t.quantity).sort(),
     ).toEqual([2, 7]);
@@ -225,12 +230,16 @@ describe("Buchungen und Mengensummen", () => {
 
   it("verhindert negative Mengen und erzeugt bei Fehlern keine Teilbuchung", async () => {
     const { project, article } = await setup();
-    await expect(materials.decrement(project.id, article.id)).rejects.toThrow();
+    await expect(
+      materials.decrement((await sheet(project.id)).id, article.id),
+    ).rejects.toThrow();
     expect(await db.measurements.count()).toBe(0);
-    await materials.addQuantity(project.id, article.id, 1);
-    await materials.decrement(project.id, article.id);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 1);
+    await materials.decrement((await sheet(project.id)).id, article.id);
     const before = await db.measurements.toArray();
-    await expect(materials.decrement(project.id, article.id)).rejects.toThrow();
+    await expect(
+      materials.decrement((await sheet(project.id)).id, article.id),
+    ).rejects.toThrow();
     expect(await db.measurements.toArray()).toEqual(before);
     expect((await materials.getTotals(project.id))[0].quantity).toBe(0);
   });
@@ -240,7 +249,11 @@ describe("Buchungen und Mengensummen", () => {
     async (quantity) => {
       const { project, article } = await setup();
       await expect(
-        materials.addQuantity(project.id, article.id, quantity),
+        materials.addQuantity(
+          (await sheet(project.id)).id,
+          article.id,
+          quantity,
+        ),
       ).rejects.toThrow();
       expect(await db.measurements.count()).toBe(0);
     },
@@ -251,7 +264,7 @@ describe("Buchungen und Mengensummen", () => {
     async (quantity) => {
       const { project, article } = await setup();
       await expect(
-        materials.setTotal(project.id, article.id, quantity),
+        materials.setTotal((await sheet(project.id)).id, article.id, quantity),
       ).rejects.toThrow();
       expect(await db.measurements.count()).toBe(0);
     },
@@ -259,9 +272,13 @@ describe("Buchungen und Mengensummen", () => {
 
   it("begrenzt auch die Summe gültiger Einzelbuchungen", async () => {
     const { project, article } = await setup();
-    await materials.addQuantity(project.id, article.id, MAX_QUANTITY);
+    await materials.addQuantity(
+      (await sheet(project.id)).id,
+      article.id,
+      MAX_QUANTITY,
+    );
     await expect(
-      materials.addQuantity(project.id, article.id, 1),
+      materials.addQuantity((await sheet(project.id)).id, article.id, 1),
     ).rejects.toThrow();
     expect((await materials.getTotals(project.id))[0].quantity).toBe(
       MAX_QUANTITY,
@@ -271,16 +288,17 @@ describe("Buchungen und Mengensummen", () => {
 
   it("verliert bei paralleler Erfassung keine Mengen und verhindert konkurrierende Unterläufe", async () => {
     const { project, article } = await setup();
+    await sheet(project.id);
     await Promise.all(
-      Array.from({ length: 6 }, () =>
-        materials.addQuantity(project.id, article.id, 1),
+      Array.from({ length: 6 }, async () =>
+        materials.addQuantity((await sheet(project.id)).id, article.id, 1),
       ),
     );
     expect((await materials.getTotals(project.id))[0].quantity).toBe(6);
-    await materials.setTotal(project.id, article.id, 1);
+    await materials.setTotal((await sheet(project.id)).id, article.id, 1);
     const outcomes = await Promise.allSettled([
-      materials.decrement(project.id, article.id),
-      materials.decrement(project.id, article.id),
+      materials.decrement((await sheet(project.id)).id, article.id),
+      materials.decrement((await sheet(project.id)).id, article.id),
     ]);
     expect(
       outcomes.filter((result) => result.status === "fulfilled"),
@@ -290,59 +308,68 @@ describe("Buchungen und Mengensummen", () => {
 
   it("deaktivierte Artikel behalten ihre Summen und erlauben nur bestehende Mengen zu reduzieren", async () => {
     const { project, article } = await setup();
-    await materials.addQuantity(project.id, article.id, 4);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 4);
     await materials.setActive(article.id, false);
     expect((await materials.getTotals(project.id))[0].quantity).toBe(4);
     await expect(
-      materials.addQuantity(project.id, article.id, 1),
+      materials.addQuantity((await sheet(project.id)).id, article.id, 1),
     ).rejects.toThrow("deaktiviert");
-    await expect(materials.setTotal(project.id, article.id, 5)).rejects.toThrow(
-      "deaktiviert",
-    );
-    await materials.decrement(project.id, article.id);
-    await materials.setTotal(project.id, article.id, 1);
+    await expect(
+      materials.setTotal((await sheet(project.id)).id, article.id, 5),
+    ).rejects.toThrow("deaktiviert");
+    await materials.decrement((await sheet(project.id)).id, article.id);
+    await materials.setTotal((await sheet(project.id)).id, article.id, 1);
     expect((await materials.getTotals(project.id))[0].quantity).toBe(1);
     await materials.setActive(article.id, true);
-    await materials.addQuantity(project.id, article.id, 2);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 2);
     expect((await materials.getTotals(project.id))[0].quantity).toBe(3);
   });
 
   it("archivierte Projekte und unbekannte Referenzen erlauben keine Erfassung", async () => {
     const { project, article } = await setup();
+    await sheet(project.id);
     await projects.setProjectStatus(project.id, "archived");
     await expect(
-      materials.addQuantity(project.id, article.id, 1),
+      materials.addQuantity((await sheet(project.id)).id, article.id, 1),
     ).rejects.toThrow("archiviert");
-    await expect(materials.setTotal(project.id, article.id, 3)).rejects.toThrow(
-      "archiviert",
-    );
+    await expect(
+      materials.setTotal((await sheet(project.id)).id, article.id, 3),
+    ).rejects.toThrow("archiviert");
     await expect(
       materials.addQuantity(crypto.randomUUID(), article.id, 1),
     ).rejects.toThrow("Projekt");
     await projects.setProjectStatus(project.id, "active");
     await expect(
-      materials.addQuantity(project.id, crypto.randomUUID(), 1),
+      materials.addQuantity(
+        (await sheet(project.id)).id,
+        crypto.randomUUID(),
+        1,
+      ),
     ).rejects.toThrow("Artikel");
     expect(await db.measurements.count()).toBe(0);
   });
 
   it("friert die erste Artikelauflösung je Projekt ein, ohne spätere Katalogpflege in alte Daten zu übertragen", async () => {
     const { project, article } = await setup();
-    await materials.addQuantity(project.id, article.id, 2);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 2);
     const changed = await materials.updateArticle(article.id, {
       ...input,
       name: "Neue Bezeichnung",
       category: "Andere Kategorie",
     });
-    await materials.addQuantity(project.id, article.id, 1);
-    await materials.setTotal(project.id, article.id, 2);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 1);
+    await materials.setTotal((await sheet(project.id)).id, article.id, 2);
     const total = (await materials.getTotals(project.id))[0];
     expect(total).toMatchObject({
       quantity: 2,
       snapshot: { name: article.name, category: article.category, revision: 1 },
     });
     const secondProject = await projects.createProject("Zweites Projekt");
-    await materials.addQuantity(secondProject.id, article.id, 1);
+    await materials.addQuantity(
+      (await sheet(secondProject.id)).id,
+      article.id,
+      1,
+    );
     expect((await materials.getTotals(secondProject.id))[0].snapshot).toEqual(
       articleSnapshot(changed),
     );
@@ -360,19 +387,21 @@ describe("Buchungen und Mengensummen", () => {
 
   it("rollt eine Mengenänderung vollständig zurück, wenn das Projekt nicht aktualisiert werden kann", async () => {
     const { project, article } = await setup();
+    await sheet(project.id);
+    const beforeProject = await projects.getProject(project.id);
     const fail = () => {
       throw new Error("Simulierter Speicherfehler");
     };
     db.projects.hook("updating", fail);
     try {
       await expect(
-        materials.addQuantity(project.id, article.id, 3),
+        materials.addQuantity((await sheet(project.id)).id, article.id, 3),
       ).rejects.toThrow("Speicherfehler");
     } finally {
       db.projects.hook("updating").unsubscribe(fail);
     }
     expect(await db.measurements.count()).toBe(0);
-    expect(await projects.getProject(project.id)).toEqual(project);
+    expect(await projects.getProject(project.id)).toEqual(beforeProject);
   });
 });
 
@@ -400,7 +429,7 @@ describe("Additive Migration und strikte Materialvalidierung", () => {
     materials = new MaterialRepository(db);
     projects = new ProjectRepository(db);
     await materials.ensureSeed();
-    expect(db.verno).toBe(2);
+    expect(db.verno).toBe(3);
     expect(await projects.getProject(project.id)).toEqual(project);
     expect(await projects.getTheme()).toBe("dark");
     expect(await projects.getLastProject()).toEqual(project);
@@ -431,7 +460,7 @@ describe("Additive Migration und strikte Materialvalidierung", () => {
 
   it("lehnt fehlerhafte Buchungen und widersprüchliche Snapshots ab", async () => {
     const { project, article } = await setup();
-    await materials.addQuantity(project.id, article.id, 1);
+    await materials.addQuantity((await sheet(project.id)).id, article.id, 1);
     const entry = (await db.measurements.toArray())[0];
     expect(isMeasurementEntry({ ...entry, delta: -1, kind: "add" })).toBe(
       false,
@@ -457,3 +486,11 @@ describe("Additive Migration und strikte Materialvalidierung", () => {
     ).toThrow("Widersprüchliche");
   });
 });
+
+async function sheet(projectId: string) {
+  const repository = new MeasurementRepository(db);
+  return (
+    (await repository.list(projectId))[0] ??
+    (await repository.save(projectId, "Testaufmaß"))
+  );
+}

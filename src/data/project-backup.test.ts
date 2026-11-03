@@ -1,10 +1,11 @@
+import { MeasurementRepository } from "./named-measurements";
 import "fake-indexeddb/auto";
 import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDatabase, type AppDatabase } from "./database";
 import { ProjectRepository } from "./projects";
 import { MaterialRepository } from "./materials";
-import { MAX_IMPORT_BYTES, type ProjectBackupV2 } from "../domain/project";
+import { MAX_IMPORT_BYTES, type ProjectBackupV3 } from "../domain/project";
 
 let db: AppDatabase;
 let projects: ProjectRepository;
@@ -29,14 +30,14 @@ afterEach(async () => {
   for (const database of databases.splice(0)) await database.delete();
 });
 
-async function sample(): Promise<ProjectBackupV2> {
+async function sample(): Promise<ProjectBackupV3> {
   const project = await projects.createProject("Testbau");
   const article = await materials.createArticle(input);
-  await materials.addQuantity(project.id, article.id, 5);
-  await materials.decrement(project.id, article.id);
+  await materials.addQuantity((await sheet(project.id)).id, article.id, 5);
+  await materials.decrement((await sheet(project.id)).id, article.id);
   return JSON.parse(
     await projects.exportProject(project.id),
-  ) as ProjectBackupV2;
+  ) as ProjectBackupV3;
 }
 
 function fresh() {
@@ -49,7 +50,7 @@ function fresh() {
   };
 }
 
-describe("Schema-2-Projektsicherungen", () => {
+describe("Schema-3-Projektsicherungen", () => {
   it("exportiert ausschließlich referenzierte Artikel inklusive deaktivierter und auf Null korrigierter Positionen", async () => {
     const backup = await sample();
     const projectId = backup.project.id;
@@ -58,14 +59,14 @@ describe("Schema-2-Projektsicherungen", () => {
       ...input,
       name: "Nullposition",
     });
-    await materials.addQuantity(projectId, zeroed.id, 1);
-    await materials.setTotal(projectId, zeroed.id, 0);
+    await materials.addQuantity((await sheet(projectId)).id, zeroed.id, 1);
+    await materials.setTotal((await sheet(projectId)).id, zeroed.id, 0);
     await materials.createArticle({ ...input, name: "Nicht erfasst" });
     await projects.setTheme("dark");
     const exported = JSON.parse(
       await projects.exportProject(projectId),
-    ) as ProjectBackupV2;
-    expect(exported.schemaVersion).toBe(2);
+    ) as ProjectBackupV3;
+    expect(exported.schemaVersion).toBe(3);
     expect(exported.articles).toHaveLength(2);
     expect(
       exported.articles.find((article) => article.id === backup.articles[0].id)
@@ -78,6 +79,7 @@ describe("Schema-2-Projektsicherungen", () => {
       "exportedAt",
       "format",
       "measurements",
+      "namedMeasurements",
       "project",
       "schemaVersion",
     ]);
@@ -164,7 +166,7 @@ describe("Schema-2-Projektsicherungen", () => {
     ]);
   });
 
-  const corruptions: [string, (backup: ProjectBackupV2) => void][] = [
+  const corruptions: [string, (backup: ProjectBackupV3) => void][] = [
     [
       "fehlender Artikel",
       (backup) => {
@@ -314,3 +316,11 @@ describe("Schema-2-Projektsicherungen", () => {
     expect(await repository.getProject(project.id)).toEqual(project);
   });
 });
+
+async function sheet(projectId: string) {
+  const repository = new MeasurementRepository(db);
+  return (
+    (await repository.list(projectId))[0] ??
+    (await repository.save(projectId, "Testaufmaß"))
+  );
+}

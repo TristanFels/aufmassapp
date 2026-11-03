@@ -1,5 +1,6 @@
 .material-filters select,
-.picker-content select {
+.picker-content select,
+.individual-measurement select {
   width: 100%;
   min-height: 48px;
   padding: 10px;

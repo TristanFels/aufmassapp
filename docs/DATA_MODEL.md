@@ -142,3 +142,15 @@ Komponenten und Views dürfen nicht unmittelbar die Datentabellen verändern; Ä
 5. Ohne Internet nach Erstinstallation starten: Oberfläche und Projektliste funktionieren.
 6. Ausgewähltes Hell-/Dunkel-/Systemdesign bleibt beim Neustart erhalten.
 7. GitHub-Repository enthält ausschließlich App-Code und unkritische Testdaten.
+
+## 11. Implementiertes Modell 0.2.1 (Vorrang vor späteren Entwürfen)
+
+- `Project` unverändert mit Metadatenschema 1.
+- `NamedMeasurement`: `id`, `projectId`, `name`, `category` (leer = nicht angegeben), `createdAt`, `updatedAt`.
+- `MeasurementEntry`: `id`, `projectId`, `measurementId`, `articleId`, eingefrorener `articleSnapshot`, `delta`, `kind` (`add`/`correction`), `createdAt`.
+- Beziehung: Projekt 1:n benanntes Aufmaß 1:n Buchung. Jede Buchung gehört genau einem Aufmaß desselben Projekts. Keine Räume/Bäume/Vorlagen/Komponenten in dieser Stufe.
+- Summen pro Aufmaß und Artikel-ID aus Deltas; Projektgesamtmenge direkt aus allen Projektbuchungen, jede einmal. Unterschiedliche Varianten bleiben durch stabile Artikel-IDs getrennt. Stückmengen 0–1.000.000 je Aufmaß/Artikel, projektweite Summe als sichere Ganzzahl.
+- Erster Snapshot je Projekt/Artikel bleibt auch über mehrere Aufmaße desselben Projekts erhalten. Spätere Katalogpflege ändert alte Beschreibungen nicht.
+- Dexie-Schema 3 ergänzt `namedMeasurements` und Aufmaßindizes. Der Upgrade ordnet alte 0.2-Buchungen je Projekt einem „Bisheriges Aufmaß“ zu; Mengen und alte Kennungen unverändert, Upgrade vollständig transaktional.
+- Sicherungsschema 3 enthält Projekt, alle `namedMeasurements`, alle `measurements` und ausschließlich referenzierte `articles`, auch Nullhistorie und leere Aufmaße. Schema 1 und 2 bleiben lesbar. Schema 2 erzeugt beim Import ein „Bisheriges Aufmaß“ für vorhandene Buchungen. Neue Aufmaß-/Buchungs-IDs beim Import, alle Referenzen werden in derselben Transaktion angepasst.
+- Vor Schreibbeginn exakte Felder, IDs, Versionen, Referenzen, Projektzugehörigkeit, Snapshots und einzelne Aufmaßsummen validieren. Fehler führen zu keiner Teiländerung. Bestehende Artikel-/Favoritenzustände und Projekte nicht überschreiben.

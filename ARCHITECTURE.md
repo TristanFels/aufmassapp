@@ -1,8 +1,8 @@
-# Architektur · Version 0.2
+# Architektur · Version 0.2.1
 
 ## Geltungsbereich
 
-Version 0.2 baut auf [Entwicklungsauftrag 001](tasks/001-foundation.md) auf und ergänzt den freigegebenen Umfang aus [Entwicklungsauftrag 002](tasks/002-measurement.md). [REQUIREMENTS.md](docs/REQUIREMENTS.md) beschreibt das langfristige Produkt; [DATA_MODEL.md](docs/DATA_MODEL.md) bleibt ein Entwurf für spätere Stufen. Materialkombinationen, Bereichsbäume, Planung, automatische Wippenzuordnung, Preise, Firmenartikelnummern, PDF, umfassende Backups und Cloud-Synchronisierung werden nicht vorgezogen.
+Version 0.2.1 baut auf [Entwicklungsauftrag 001](tasks/001-foundation.md) auf und erweitert [Entwicklungsauftrag 002](tasks/002-measurement.md) gemäß [Entwicklungsauftrag 003](tasks/003-named-measurements.md). [REQUIREMENTS.md](docs/REQUIREMENTS.md) beschreibt das langfristige Produkt; [DATA_MODEL.md](docs/DATA_MODEL.md) bleibt ein Entwurf für spätere Stufen. Materialkombinationen, Bereichsbäume, Planung, automatische Wippenzuordnung, Preise, Firmenartikelnummern, PDF, umfassende Backups und Cloud-Synchronisierung werden nicht vorgezogen.
 
 React und TypeScript bilden die Oberfläche, Vite erstellt statische Dateien. IndexedDB mit Dexie speichert Projekte, Katalog, Buchungen und Einstellungen lokal. `vite-plugin-pwa` erzeugt Manifest und Service Worker. Es gibt keinen Anwendungsserver, keine Anmeldung und keine Remote-Datenhaltung.
 
@@ -35,11 +35,11 @@ Name und Kategorie können weiter gepflegt werden. Sobald Buchungen eine Variant
 
 ### Buchungen und Summen
 
-Jede tatsächliche Mengenänderung erzeugt eine `MeasurementEntry` mit stabiler ID, `projectId`, `articleId`, eingefrorenem `articleSnapshot`, ganzzahligem `delta`, Typ `add` oder `correction` und Zeitstempel. Ein unveränderter Gesamtwert erzeugt keine Nullbuchung.
+Jede tatsächliche Mengenänderung erzeugt eine `MeasurementEntry` mit stabiler ID, `projectId`, `measurementId`, `articleId`, eingefrorenem `articleSnapshot`, ganzzahligem `delta`, Typ `add` oder `correction` und Zeitstempel. Ein unveränderter Gesamtwert erzeugt keine Nullbuchung.
 
 Die erste Erfassung eines Artikels in einem Projekt friert seinen Namen, Kategorie, Einheit, Ausführungsmerkmale und Revision ein. Folgebuchungen derselben Projekt-/Artikelkombination verwenden denselben Stand. Katalogänderungen verwandeln somit keine bestehenden Aufmaße rückwirkend in andere Materialien oder Beschreibungen.
 
-Die Materialliste summiert Deltas nach stabiler Artikel-ID, niemals nach Anzeigenamen. +1 und numerisches Hinzufügen erzeugen positive Deltas. Minus und „Gesamtmenge ändern“ berechnen eine zusätzliche Korrektur gegenüber der aktuellen Summe; ältere Buchungen bleiben unverändert. Summen müssen ganzzahlig zwischen 0 und 1.000.000 liegen. Verschiedene Ausführungen werden nicht zusammengefasst. Bei Menge null bleiben die Buchungen für Sicherung und Nachvollziehbarkeit vorhanden; CSV lässt Nullzeilen aus.
+Die Materialliste summiert Deltas nach stabiler Artikel-ID, niemals nach Anzeigenamen. Numerisches Hinzufügen erzeugt positive Deltas. „Gesamtmenge bearbeiten“ berechnen eine zusätzliche Korrektur gegenüber der aktuellen Summe; ältere Buchungen bleiben unverändert. Summen müssen je Aufmaß/Artikel ganzzahlig zwischen 0 und 1.000.000 liegen. Projektweite Summen dürfen größer sein, müssen aber sichere Ganzzahlen bleiben. Verschiedene Ausführungen werden nicht zusammengefasst. Bei Menge null bleiben die Buchungen für Sicherung und Nachvollziehbarkeit vorhanden; CSV lässt Nullzeilen aus.
 
 Jede Mengenoperation prüft Projektstatus, Artikel und aktuelle Summe in derselben Schreibtransaktion wie das Einfügen der Buchung und die Aktualisierung des Projektzeitstempels. Archivierte Projekte erlauben keine Mengenänderung. Projektbenennung, Anzeige und Export bleiben wie bisher möglich.
 
@@ -47,17 +47,17 @@ Jede Mengenoperation prüft Projektstatus, Artikel und aktuelle Summe in derselb
 
 Datenbankversion 1 enthält `projects` und `settings`. Version 2 ergänzt `articles` und `measurements` samt Indizes für Projekt-/Artikelbezüge. Bestehende Projekte und Einstellungen werden nicht umgeschrieben oder entfernt; insbesondere bleiben Designwahl und letzter Projektzugriff erhalten. Die Datenbank wird bei einem Fehler nicht gelöscht oder neu angelegt.
 
-App-Version, Dexie-Datenbankversion, Projektmetadatenschema und JSON-Sicherungsschema sind getrennte Konzepte. Version 0.2 verwendet Datenbankversion 2 und Sicherungsschema 2, während Projektmetadaten weiterhin Schema 1 haben. Spätere Änderungen benötigen explizite Migrationen und Tests, statt alte Felder stillschweigend zu verwerfen.
+App-Version, Dexie-Datenbankversion, Projektmetadatenschema und JSON-Sicherungsschema sind getrennte Konzepte. Version 0.2.1 verwendet Datenbankversion 3 und Sicherungsschema 3, während Projektmetadaten weiterhin Schema 1 haben. Spätere Änderungen benötigen explizite Migrationen und Tests, statt alte Felder stillschweigend zu verwerfen.
 
 Vor einem Upgrade wird eine extern gespeicherte JSON-Sicherung empfohlen. Alte Dateien aus 0.1/0.1.1 sichern nur Projektmetadaten, weil dort keine Materialerfassung existierte. Die neue Projektdatei ersetzt kein vollständiges App-Backup, insbesondere für noch unbenutzte eigene Katalogartikel.
 
 ## Versionierte Projekt-JSON-Datei
 
-Der Export verwendet `format: baustellenaufmass-project`, `schemaVersion: 2`, App-Version und Exportzeitpunkt sowie genau ein Projekt, seine `measurements` und ausschließlich referenzierte `articles`. Dazu zählen auch Artikel mit auf null korrigiertem Buchungsverlauf. Der übrige Katalog, andere Projekte und die Designwahl werden nicht exportiert.
+Der Export verwendet `format: baustellenaufmass-project`, `schemaVersion: 3`, App-Version und Exportzeitpunkt sowie genau ein Projekt, seine `namedMeasurements`, deren `measurements` und ausschließlich referenzierte `articles`. Dazu zählen auch Artikel mit auf null korrigiertem Buchungsverlauf. Der übrige Katalog, andere Projekte und die Designwahl werden nicht exportiert.
 
-Vor dem Schreiben werden JSON-Syntax, Größe, exakte Struktur, unterstützte Versionen, IDs, Zeitstempel, Status, Artikel-/Buchungsfelder, Referenzen, eingefrorene Variantenstände und gültige nicht negative Gesamtsummen geprüft. Unbekannte Felder werden abgelehnt statt unbemerkt verworfen. Das bisherige Sicherungsschema 1 aus 0.1/0.1.1 wird weiterhin als Projekt ohne Materialdaten akzeptiert.
+Vor dem Schreiben werden JSON-Syntax, Größe, exakte Struktur, unterstützte Versionen, IDs, Zeitstempel, Status, Artikel-/Buchungsfelder, Referenzen, eingefrorene Variantenstände und gültige nicht negative Gesamtsummen geprüft. Unbekannte Felder werden abgelehnt statt unbemerkt verworfen. Schema 1 aus 0.1/0.1.1 wird als Projekt ohne Materialdaten akzeptiert; Schema 2 erhält beim Import ein „Bisheriges Aufmaß“ für alle enthaltenen Buchungen.
 
-Der Import übernimmt Projekt, erforderliche Artikel und Buchungen in einer IndexedDB-Transaktion. Eine Projekt-ID-Kollision erzeugt eine neue Projekt-ID; bestehende Projekte werden nie überschrieben. Eine vorhandene Artikel-ID wird nur bei gleichen Beschreibungs-/Ausführungsfeldern und mindestens gleich neuer lokaler Revision wiederverwendet; lokale Aktiv-/Favoritenzustände werden dabei nicht überschrieben. Bei einem Artikelkonflikt wird eine neue ID vergeben. Importierte Buchungen erhalten neue IDs. Alle betroffenen Verweise einschließlich Snapshot-IDs werden konsistent umgesetzt, ohne vorhandene Datensätze zu überschreiben. Fehler dürfen keine teilweise importierten Projekte, Artikel oder Buchungen hinterlassen.
+Der Import übernimmt Projekt, alle Aufmaße (auch leere), erforderliche Artikel und Buchungen in einer IndexedDB-Transaktion. Eine Projekt-ID-Kollision erzeugt eine neue Projekt-ID; bestehende Projekte werden nie überschrieben. Eine vorhandene Artikel-ID wird nur bei gleichen Beschreibungs-/Ausführungsfeldern und mindestens gleich neuer lokaler Revision wiederverwendet; lokale Aktiv-/Favoritenzustände werden dabei nicht überschrieben. Bei einem Artikelkonflikt wird eine neue ID vergeben. Importierte Aufmaße und Buchungen erhalten neue IDs, deren Projekt-/Aufmaßreferenzen konsistent umgeschrieben werden. Alle betroffenen Verweise einschließlich Snapshot-IDs werden konsistent umgesetzt, ohne vorhandene Datensätze zu überschreiben. Fehler dürfen keine teilweise importierten Projekte, Artikel oder Buchungen hinterlassen.
 
 Die Namensregel aus 0.1.1 bleibt erhalten: „(Import)“, danach die nächste freie Nummer „(Import 2)“ usw. Aktive und archivierte Namen werden unter Berücksichtigung von Groß-/Kleinschreibung und kanonischem Unicode geprüft. Vorhandene generierte Zusätze werden nicht gestapelt; lange Basisnamen werden Unicode-sicher gekürzt. Namenswahl und Speicherung erfolgen atomar. Erweiterter Import mit Vorschau, Zusammenführen oder Ersetzen gehört nicht zu 0.2.
 
@@ -78,3 +78,13 @@ Offlinefähigkeit setzt eine vollständige Erstinstallation und erhaltenen Brows
 Die automatisierten Prüfungen umfassen Projektlebenszyklus, Katalogpflege, wiederholbaren Seed, stabile Variantenidentität, Buchungen/Korrekturen, Mengenaggregation, CSV-Maskierung, Datenbankmigration und JSON-Roundtrips samt Konflikten und Fehlerfällen. Playwright prüft die Produktions-App unter dem Pages-Unterpfad und Offlineverhalten. Die tatsächlich ausgeführten Ergebnisse stehen im Änderungsbericht; diese Architektur behauptet keinen bereits bestandenen neuen Lauf.
 
 `fake-indexeddb` beweist kein iOS-Verhalten, und Chromium ersetzt keinen installierten iPhone-Kaltstart. Der manuelle Plan in der README ergänzt Upgrade von 0.1, Touch-/Tastaturbedienung, Dateiauswahl, CSV in der Ziel-App und JSON-Wiederherstellung auf frischer Installation. Eine universelle Aufbewahrungsgarantie oder automatische Cloud-Sicherung wird nicht zugesagt.
+
+## Benannte individuelle Aufmaße (0.2.1)
+
+`namedMeasurements` speichert stabile UUID, `projectId`, Namen (1–120 Zeichen), optionale Kategorie (0–80), `createdAt` und `updatedAt`. Jede neu geschriebene Buchung enthält eine gültige `measurementId`. `MeasurementRepository` verwaltet Anlegen/Umbenennen und Einzel-CSV. `MaterialRepository` erhält bei Mengenänderungen die Aufmaß-ID und liest Projekt und Aufmaß innerhalb derselben Transaktion. Summenkorrekturen lesen nur Buchungen des gewählten Aufmaßes. Der erste Snapshot je Projekt/Artikel bleibt über alle Aufmaße desselben Projekts stabil.
+
+Dexie-Version 3 ergänzt Aufmaßtabelle und Indizes `measurementId` / `[measurementId+articleId]`. Im versionierten Upgrade wird je Projekt mit alten Buchungen ein „Bisheriges Aufmaß“ angelegt. Buchungen werden ohne Mengen-/ID-/Snapshotänderung zugeordnet. Fehler bei Validierung oder Schreiben brechen den gesamten IndexedDB-Upgrade einschließlich Schemaänderungen ab. Kein Löschen/Neuanlegen als Fehlerbehandlung. Bestehende Projekte, Artikel und Einstellungen werden nicht verändert.
+
+Projektmateriallisten summieren die Buchungen direkt nach Artikel-ID, ohne Einzel- und Projektsummen zusätzlich zusammenzuzählen. Schema-3-Validierung prüft eindeutige Aufmaß-IDs, Projektzugehörigkeit und Referenzen jeder Buchung sowie nicht negative Summen für jedes einzelne Aufmaß. Eine positive Projektsumme darf negative Einzelsummen nicht verdecken. Leere Aufmaße gehören zur Sicherung.
+
+Hash-Routen: `#/projects` für Projektverwaltung, `#/measurements` für Projektauswahl, `#/measurements/:projectId` für Aufmaßverwaltung und gemeinsame Materialliste, `#/measurements/:projectId/:id` für individuelles Aufmaß. Ungültige/fehlende Objekte zeigen einen Fehler mit Rücknavigation. Die untere Navigation bleibt unter allen Routen sichtbar. Erfassung und Gesamtmengenkorrektur haben getrennte Formulare.
